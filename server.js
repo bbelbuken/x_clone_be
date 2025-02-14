@@ -12,6 +12,10 @@ const errorHandler = require('./middlewares/errorHandler');
 const PORT = process.env.PORT || 3500;
 
 connectDB();
+(async () => {
+    const chalk = await import('chalk');
+    console.log(chalk.default.red.italic(process.env.NODE_ENV));
+})();
 
 // MIDDLEWARES
 app.use(logger);

@@ -5,9 +5,13 @@ const path = require('path');
 const cors = require('cors');
 const corsOptions = require('./config/corsOptions');
 const cookieParser = require('cookie-parser');
-const { logger } = require('./middlewares/logger');
+const mongoose = require('mongoose');
+const connectDB = require('./config/connectDB');
+const { logger, logEvents } = require('./middlewares/logger');
 const errorHandler = require('./middlewares/errorHandler');
 const PORT = process.env.PORT || 3500;
+
+connectDB();
 
 // MIDDLEWARES
 app.use(logger);
@@ -33,4 +37,15 @@ app.all('*', (req, res) => {
 
 app.use(errorHandler);
 
-app.listen(PORT, () => console.log(`Server is running port on ${PORT}`));
+// LISTENERS
+mongoose.connection.once('open', () => {
+    console.log('Connected to MongoDB');
+    app.listen(PORT, () => console.log(`Server is running port on ${PORT}`));
+});
+mongoose.connection.on('error', (err) => {
+    console.error(err);
+    logEvents(
+        `${err.no}: ${err.code}\t${err.syscall}\t${err.hostname}`,
+        'mongoErrLog.log'
+    );
+});

@@ -1,0 +1,13 @@
+{
+  "name": "x_clone_be",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server",
+    "dev": "nodemon server"
+  },
+  "keywords": [],
+  "author": "batuhan belbuken",
+  "license": "ISC",
+  "description": "backend for x_clone"
+}

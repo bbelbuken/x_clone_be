@@ -3,7 +3,6 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const fsPromises = require('fs').promises;
 const path = require('path');
-const { log, dir } = require('console');
 
 const logEvents = async (message, logFileName) => {
     const dateTime = format(new Date(), 'yyyMMdd\tHH:mm:ss');
@@ -25,7 +24,6 @@ const logEvents = async (message, logFileName) => {
 const logger = (req, res, next) => {
     logEvents(`${req.method}\t${req.url}\t${req.headers.origin}`, 'reqLog.log');
     console.log(`${req.method}  ${req.path}`);
-    console.dir();
     next();
 };
 

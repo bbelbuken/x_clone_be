@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
+const { deleteFileFromS3 } = require('../utils/s3Helpers');
 
 const getUser = async (req, res) => {
     const users = await User.find().select('-password').lean();
@@ -58,7 +59,7 @@ const updateUser = async (req, res) => {
     // find user by ID
     const user = await User.findById(id).exec();
     if (!user) {
-        return res.status(400).json({ message: 'User not found' });
+        return res.status(404).json({ message: 'User not found' });
     }
 
     // ? duplicate
@@ -96,7 +97,7 @@ const deleteUser = async (req, res) => {
 
     const user = await User.findById(id).exec();
     if (!user) {
-        return res.status(400).json({ message: 'User not found' });
+        return res.status(404).json({ message: 'User not found' });
     }
 
     await user.deleteOne();
@@ -143,6 +144,49 @@ const uploadHeaderToUser = async (req, res) => {
     });
 };
 
+const deleteAvatarFromUser = async (req, res) => {
+    const { username } = req.params;
+
+    const user = await User.findOne({ username }).exec();
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    }
+
+    // ? Check if the user already has an avatar
+    if (!user.avatar) {
+        return res.status(400).json({ message: 'No avatar to delete' });
+    }
+
+    // Delete the avatar file from S3
+    await deleteFileFromS3(user.avatar);
+
+    // Remove the avatar field from the user's document
+    user.avatar = undefined;
+    await user.save();
+
+    res.status(200).json({ message: 'Avatar deleted successfully' });
+};
+
+const deleteHeaderFromUser = async (req, res) => {
+    const { username } = req.params;
+
+    const user = await User.findOne({ username }).exec();
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!user.header_photo) {
+        return res.status(400).json({ message: 'No header photo to delete' });
+    }
+
+    await deleteFileFromS3(user.header_photo);
+
+    user.header_photo = undefined;
+    await user.save();
+
+    res.status(200).json({ message: 'Header photo deleted successfully' });
+};
+
 module.exports = {
     getUser,
     createUser,
@@ -150,4 +194,6 @@ module.exports = {
     deleteUser,
     uploadAvatarToUser,
     uploadHeaderToUser,
+    deleteAvatarFromUser,
+    deleteHeaderFromUser,
 };

@@ -49,6 +49,8 @@ const updateUser = async (req, res) => {
         bio,
         location,
         website,
+        avatar,
+        header_photo,
     } = req.body;
 
     // auth
@@ -83,6 +85,22 @@ const updateUser = async (req, res) => {
     if (req.body.hasOwnProperty('location')) user.location = location;
     if (req.body.hasOwnProperty('website')) user.website = website;
     if (password) user.password = await bcrypt.hash(password, 10);
+
+    if (avatar && avatar !== user.avatar) {
+        await deleteFileFromS3(user.avatar);
+        user.avatar = avatar;
+    } else if (avatar === '' && user.avatar !== '') {
+        await deleteFileFromS3(user.avatar);
+        user.avatar = '';
+    }
+
+    if (header_photo && header_photo !== user.header_photo) {
+        await deleteFileFromS3(user.header_photo);
+        user.header_photo = header_photo;
+    } else if (header_photo === '' && user.header_photo !== '') {
+        await deleteFileFromS3(user.header_photo);
+        user.header_photo = '';
+    }
 
     const updatedUser = await user.save();
 

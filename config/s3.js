@@ -1,11 +1,13 @@
-const AWS = require('aws-sdk');
+// Import S3Client from AWS SDK v3
+const { S3Client } = require('@aws-sdk/client-s3');
 
 // Set up AWS credentials and region
-AWS.config.update({
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+const s3 = new S3Client({
     region: process.env.AWS_REGION,
+    credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    },
 });
 
-const s3 = new AWS.S3();
 module.exports = s3;

@@ -5,14 +5,14 @@ const s3 = require('../config/s3');
 const getUser = async (req, res) => {
     const users = await User.find().select('-password').lean();
     if (!users?.length) {
-        return res.status(400).json({ message: 'No users found' });
+        return res.status(404).json({ message: 'No users found' });
     }
     res.json(users);
 };
 
 const createUser = async (req, res) => {
     const { username, password } = req.body;
-    if (!username || password) {
+    if (!username || !password) {
         return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -33,7 +33,7 @@ const createUser = async (req, res) => {
 
     const user = await User.create({ username, password: hashedPwd });
     if (user) {
-        res.status(201), json({ message: `New user ${username} created` });
+        res.status(201).json({ message: `New user ${username} created` });
     } else {
         res.status(400).json({ message: 'Invalid user data received' });
     }
@@ -104,7 +104,9 @@ const deleteUser = async (req, res) => {
 
     await user.deleteOne();
 
-    res.json({ message: `Username ${user.username} with ID ${id} deleted` });
+    res.json({
+        message: `Username ${user.username} with ID ${user.id} deleted`,
+    });
 };
 
 module.exports = {

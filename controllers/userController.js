@@ -1,6 +1,5 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
-const s3 = require('../config/s3');
 
 const getUser = async (req, res) => {
     const users = await User.find().select('-password').lean();
@@ -107,9 +106,48 @@ const deleteUser = async (req, res) => {
     });
 };
 
+//////////////////////////////////////////////////////////////
+
+const uploadAvatarToUser = async (req, res) => {
+    const { username } = req.params;
+
+    const user = await User.findOne({ username }).exec();
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    }
+
+    // If the file is uploaded successfully, the S3 URL will be in req.file.location
+    user.avatar = req.file.location; // Store the S3 URL in the avatar field
+    await user.save();
+
+    res.status(200).json({
+        message: 'Avatar uploaded successfully',
+        avatarUrl: req.file.location, // Return the S3 URL of the uploaded avatar
+    });
+};
+
+const uploadHeaderToUser = async (req, res) => {
+    const { username } = req.params;
+
+    const user = await User.findOne({ username }).exec();
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    }
+
+    user.header_photo = req.file.location;
+    await user.save();
+
+    res.status(200).json({
+        message: 'Header photo uploaded successfully',
+        headerUrl: req.file.location,
+    });
+};
+
 module.exports = {
     getUser,
     createUser,
     updateUser,
     deleteUser,
+    uploadAvatarToUser,
+    uploadHeaderToUser,
 };

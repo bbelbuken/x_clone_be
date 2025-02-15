@@ -14,4 +14,10 @@ const upload = multer({
     }),
 });
 
-module.exports = upload;
+// Middleware to handle avatar upload
+const uploadAvatar = upload.single('avatar'); // 'avatar' is the field name from the form
+
+// Middleware to handle header photo upload
+const uploadHeader = upload.single('header_photo');
+
+module.exports = { uploadAvatar, uploadHeader };

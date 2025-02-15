@@ -25,10 +25,20 @@ const postSchema = new mongoose.Schema(
         },
 
         reactions: {
+            replyCount: {
+                type: Number,
+                default: 0,
+            },
+
             repliedBy: {
                 type: [mongoose.Schema.Types.ObjectId],
                 ref: 'User',
                 default: [],
+            },
+
+            repostCount: {
+                type: Number,
+                default: 0,
             },
 
             repostedBy: {
@@ -43,10 +53,20 @@ const postSchema = new mongoose.Schema(
                 default: [],
             },
 
+            likeCount: {
+                type: Number,
+                default: 0,
+            },
+
             likedBy: {
                 type: [mongoose.Schema.Types.ObjectId],
                 ref: 'User',
                 default: [],
+            },
+
+            viewCount: {
+                type: Number,
+                default: 0,
             },
 
             viewedBy: {
@@ -60,5 +80,17 @@ const postSchema = new mongoose.Schema(
         timestamps: true,
     }
 );
+
+// Pre-save middleware to update the count fields
+// ! 'save' is unique
+postSchema.pre('save', function (next) {
+    this.reactions.replyCount = this.reactions.repliedBy.length;
+    this.reactions.repostCount =
+        this.reactions.repostedBy.length + this.reactions.quotedBy.length;
+    this.reactions.likeCount = this.reactions.likedBy.length;
+    this.reactions.viewCount = this.reactions.viewedBy.length;
+
+    next();
+});
 
 module.exports = mongoose.model('Post', postSchema);

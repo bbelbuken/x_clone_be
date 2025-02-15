@@ -54,36 +54,34 @@ const updateUser = async (req, res) => {
     // auth
     if (!id) {
         return res.status(400).json({ message: 'id is required' });
-    } else if (!password) {
-        return res.status(400).json({ message: 'password is required' });
-    } else if (!username) {
-        return res.status(400).json({ message: 'username is required' });
     }
 
-    // find user
+    // find user by ID
     const user = await User.findById(id).exec();
     if (!user) {
         return res.status(400).json({ message: 'User not found' });
     }
 
     // ? duplicate
-    const duplicate = await User.findOne({ username })
-        .collation({
-            locale: 'en',
-            strength: 2,
-        }) // case sensitivity
-        .lean()
-        .exec();
-    if (duplicate) {
-        return res.status(409).json({ message: 'Duplicate user' });
+    if (username && username !== user.username) {
+        const duplicate = await User.findOne({ username })
+            .collation({
+                locale: 'en',
+                strength: 2,
+            }) // case sensitivity
+            .lean()
+            .exec();
+        if (duplicate) {
+            return res.status(409).json({ message: 'Duplicate user' });
+        }
+        user.username = username;
     }
 
-    user.username = username;
     if (fullname) user.fullname = fullname;
     if (verified !== undefined) user.verified = verified;
-    if (bio) user.bio = bio;
-    if (location) user.location = location;
-    if (website) user.website = website;
+    if (req.body.hasOwnProperty('bio')) user.bio = bio;
+    if (req.body.hasOwnProperty('location')) user.location = location;
+    if (req.body.hasOwnProperty('website')) user.website = website;
     if (password) user.password = await bcrypt.hash(password, 10);
 
     const updatedUser = await user.save();

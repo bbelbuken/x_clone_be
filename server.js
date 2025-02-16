@@ -8,6 +8,7 @@ const corsOptions = require('./config/corsOptions');
 const cookieParser = require('cookie-parser');
 const mongoose = require('mongoose');
 const connectDB = require('./config/connectDB');
+const fileUpload = require('express-fileupload');
 const { logger, logEvents } = require('./middlewares/logger');
 const errorHandler = require('./middlewares/errorHandler');
 const PORT = process.env.PORT || 3500;
@@ -23,6 +24,7 @@ app.use(logger);
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(fileUpload());
 app.use(cookieParser());
 app.use('/', express.static(path.join(__dirname, 'public')));
 

@@ -4,11 +4,14 @@ const fs = require('fs');
 
 // Upload a single file to S3
 const uploadFileToS3 = async (file, folder) => {
-    const fileStream = fs.createReadStream(file.path); // Create a read stream for the file
+    if (!file.name) {
+        throw new Error('File name is missing');
+    }
+
     const params = {
         Bucket: process.env.AWS_BUCKET_NAME,
-        Key: `${folder}/${Date.now()}-${file.originalname}`, // Unique key with folder and timestamp
-        Body: fileStream,
+        Key: `${folder}/${Date.now()}-${file.name}`, // Unique key with folder and timestamp
+        Body: file.data,
         ContentType: file.mimetype, // MIME type (e.g., image/jpeg, video/mp4)
     };
 
@@ -48,10 +51,10 @@ const uploadFilesToS3 = async (files, folder) => {
     return fileUrls; // Return an array of URLs of uploaded files
 };
 
-const deleteFileFromS3 = async (fileUrl) => {
+const deleteFileFromS3 = async (fileKey) => {
     const params = {
         Bucket: process.env.AWS_BUCKET_NAME,
-        Key: fileUrl.split('/').pop(), // Extract file key from URL
+        Key: fileKey,
     };
 
     try {

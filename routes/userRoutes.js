@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
-const { uploadAvatar, uploadHeader } = require('../middlewares/upload');
 
 router
     .route('/')
@@ -12,11 +11,11 @@ router
 
 router
     .route('/:username/upload_avatar')
-    .post(uploadAvatar, userController.uploadAvatarToUser);
+    .post(userController.uploadAvatarToUser);
 
 router
     .route('/:username/upload_header')
-    .post(uploadHeader, userController.uploadHeaderToUser);
+    .post(userController.uploadHeaderToUser);
 
 router
     .route('/:username/delete_avatar')

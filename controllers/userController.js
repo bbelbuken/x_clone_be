@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
-const { deleteFileFromS3 } = require('../utils/s3Helpers');
+const { deleteFileFromS3, uploadFileToS3 } = require('../utils/s3Helpers');
 
 const getUser = async (req, res) => {
     const users = await User.find().select('-password').lean();
@@ -135,13 +135,21 @@ const uploadAvatarToUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    // If the file is uploaded successfully, the S3 URL will be in req.file.location
-    user.avatar = req.file.location; // Store the S3 URL in the avatar field
+    // ? Check if a file is uploaded
+    if (!req.files || !req.files.avatar) {
+        return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Upload the file to S3 and store the URL
+    const avatarUrl = await uploadFileToS3(req.files.avatar, 'userAvatars'); // Upload to "userAvatars" folder
+
+    // Store the S3 URL in the user's avatar field
+    user.avatar = avatarUrl;
     await user.save();
 
     res.status(200).json({
         message: 'Avatar uploaded successfully',
-        avatarUrl: req.file.location, // Return the S3 URL of the uploaded avatar
+        avatarUrl: avatarUrl, // Return the S3 URL of the uploaded avatar
     });
 };
 
@@ -153,12 +161,21 @@ const uploadHeaderToUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    user.header_photo = req.file.location;
+    // ? Check if a file is uploaded
+    if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Upload the file to S3 and store the URL
+    const headerUrl = await uploadFileToS3(req.file, 'userHeaders'); // Upload to "userHeaders" folder
+
+    // Store the S3 URL in the user's header field
+    user.header = headerUrl;
     await user.save();
 
     res.status(200).json({
-        message: 'Header photo uploaded successfully',
-        headerUrl: req.file.location,
+        message: 'Header uploaded successfully',
+        headerUrl: headerUrl, // Return the S3 URL of the uploaded header
     });
 };
 
@@ -175,11 +192,14 @@ const deleteAvatarFromUser = async (req, res) => {
         return res.status(400).json({ message: 'No avatar to delete' });
     }
 
+    // Extract the key from the avatar URL if it's a full URL
+    const avatarKey = user.avatar.split('/').slice(3).join('/'); // Remove the bucket name part
+
     // Delete the avatar file from S3
-    await deleteFileFromS3(user.avatar);
+    await deleteFileFromS3(avatarKey);
 
     // Remove the avatar field from the user's document
-    user.avatar = undefined;
+    user.avatar = '';
     await user.save();
 
     res.status(200).json({ message: 'Avatar deleted successfully' });

@@ -1,26 +1,26 @@
 const { drive } = require('../config/googleDriveConfig');
-const fs = require('fs');
+const streamifier = require('streamifier');
 
 const uploadFileToGoogleDrive = async (file, folder) => {
-    if (!file.name) {
+    if (!file.originalname) {
         throw new Error('File name is missing');
     }
 
     const fileMetadata = {
-        name: `${Date.now()}-${file.name}`, // Unique file name with timestamp
-        parents: [folder], // Specify the folder ID where the file will be uploaded (if needed)
+        name: `${Date.now()}-${file.originalname}`, // Ensure you're using originalname
+        parents: [folder], // Folder ID to upload the file to
     };
 
     const media = {
-        mimeType: file.mimetype, // MIME type (e.g., image/jpeg, video/mp4)
-        body: fs.createReadStream(file.data), // File data stream
+        mimeType: file.mimetype, // MIME type (image/jpeg, video/mp4, etc.)
+        body: streamifier.createReadStream(file.buffer), // Use the buffer to upload the file
     };
 
     try {
         const fileUploaded = await drive.files.create({
             resource: fileMetadata,
             media: media,
-            fields: 'id', // Return file ID
+            fields: 'id',
         });
         return `https://drive.google.com/uc?id=${fileUploaded.data.id}`; // Return the file URL
     } catch (error) {

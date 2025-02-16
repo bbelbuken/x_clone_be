@@ -11,7 +11,6 @@
   "license": "ISC",
   "description": "backend for x_clone",
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.749.0",
     "bcrypt": "^5.1.1",
     "chalk": "^5.4.1",
     "cookie-parser": "^1.4.7",
@@ -21,6 +20,7 @@
     "express": "^4.21.2",
     "express-async-errors": "^3.1.1",
     "express-fileupload": "^1.5.1",
+    "googleapis": "^144.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.10.1",
     "mongoose-sequence": "^6.0.1",

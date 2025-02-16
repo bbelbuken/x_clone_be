@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
+const { upload } = require('../middlewares/multer');
 
 router
     .route('/')
@@ -11,11 +12,11 @@ router
 
 router
     .route('/:username/upload_avatar')
-    .post(userController.uploadAvatarToUser);
+    .post(upload.single('avatar'), userController.uploadAvatarToUser);
 
 router
     .route('/:username/upload_header')
-    .post(userController.uploadHeaderToUser);
+    .post(upload.single('header_photo'), userController.uploadHeaderToUser);
 
 router
     .route('/:username/delete_avatar')

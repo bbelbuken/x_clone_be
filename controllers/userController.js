@@ -161,16 +161,19 @@ const uploadHeaderToUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    // ? Check if a file is uploaded
-    if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
+    // Check if a file is uploaded
+    if (!req.files || !req.files.header_photo) {
+        return res.status(400).json({ message: 'No header file uploaded' });
     }
 
     // Upload the file to S3 and store the URL
-    const headerUrl = await uploadFileToS3(req.file, 'userHeaders'); // Upload to "userHeaders" folder
+    const headerUrl = await uploadFileToS3(
+        req.files.header_photo,
+        'userHeaders'
+    ); // Upload to "userHeaders" folder
 
     // Store the S3 URL in the user's header field
-    user.header = headerUrl;
+    user.header_photo = headerUrl;
     await user.save();
 
     res.status(200).json({
@@ -213,13 +216,18 @@ const deleteHeaderFromUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
+    // ? Check if the user already has an header
     if (!user.header_photo) {
         return res.status(400).json({ message: 'No header photo to delete' });
     }
 
-    await deleteFileFromS3(user.header_photo);
+    // Extract the key from the avatar URL if it's a full URL
+    const header_photoKey = user.header_photo.split('/').slice(3).join('/'); // Remove the bucket name part
 
-    user.header_photo = undefined;
+    // Delete the avatar file from S3
+    await deleteFileFromS3(header_photoKey);
+
+    user.header_photo = '';
     await user.save();
 
     res.status(200).json({ message: 'Header photo deleted successfully' });

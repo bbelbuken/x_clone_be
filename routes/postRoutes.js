@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const router = express.Router({ mergeParams: true }); // ! important
 const postController = require('../controllers/postController');
 
 router.route('/').get(postController.getPosts).post(postController.createPost);

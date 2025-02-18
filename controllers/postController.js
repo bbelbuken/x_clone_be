@@ -110,6 +110,8 @@ const updatePost = async (req, res) => {
 };
 
 const deletePost = async (req, res) => {
+    console.log(req.params);
+
     const { postId, username } = req.params;
 
     console.log('username from requested params', username);

@@ -43,3 +43,7 @@ const createPost = async (req, res) => {
         return res.status(400).json({ message: 'Invalid note data received' });
     }
 };
+
+const updatePost = async (req, res) => {
+    const { Post._id: postId, content, media } = req.body;
+};

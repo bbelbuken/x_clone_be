@@ -15,11 +15,11 @@ const postSchema = new mongoose.Schema(
 
         media: {
             image: {
-                type: String,
+                type: [String],
                 default: '',
             },
             video: {
-                type: String,
+                type: [String],
                 default: '',
             },
         },

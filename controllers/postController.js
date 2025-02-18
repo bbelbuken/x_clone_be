@@ -24,8 +24,8 @@ const createPost = async (req, res) => {
     }
 
     let mediaUrls = {
-        image: '',
-        video: '',
+        image: [],
+        video: [],
     };
 
     if (mediaFiles.length > 0) {
@@ -34,6 +34,15 @@ const createPost = async (req, res) => {
             mediaFiles,
             process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
         );
+        uploadedUrls.forEach((fileUrl, index) => {
+            const mimeType = mediaFiles[index].mimetype; // Get MIME type of the file
+
+            if (mimeType.startsWith('image/')) {
+                mediaUrls.image.push(fileUrl);
+            } else if (mimeType.startsWith('video/')) {
+                mediaUrls.video.push(fileUrl);
+            }
+        });
     }
 
     const post = await Post.create({

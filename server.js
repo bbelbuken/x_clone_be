@@ -29,6 +29,7 @@ app.use('/', express.static(path.join(__dirname, 'public')));
 // ROUTES
 app.use('/', require('./routes/root'));
 app.use('/users', require('./routes/userRoutes'));
+app.use('/:username/status/:postId', require('/routes/postRoutes'));
 
 app.all('*', (req, res) => {
     res.status(404);

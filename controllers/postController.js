@@ -60,7 +60,7 @@ const updatePost = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    const post = await Post.findById({ postId }).exec();
+    const post = await Post.findById(postId).exec();
     if (!post) {
         return res.status(404).json({ message: 'Post not found' });
     }

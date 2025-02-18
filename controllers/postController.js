@@ -108,3 +108,39 @@ const updatePost = async (req, res) => {
         .status(200)
         .json({ message: 'Post updated successfully', post: updatedPost });
 };
+
+const deletePost = async (req, res) => {
+    const { postId, username } = req.params;
+    const userId = req.body; // ! change this to req.userID with JWT AUTH
+
+    // Find the user by username to verify ownership
+    const user = await User.findOne({ username }).exec();
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Find the post by ID
+    const post = await Post.findById(postId).exec();
+    if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    // Ensure the user owns the post and is verified
+    if (user._id.toString() !== post.userId.toString()) {
+        return res
+            .status(403)
+            .json({ message: 'You are not authorized to delete this post' });
+    }
+
+    if (post.media && post.media.length > 0) {
+        for (const mediaUrl of post.nedia) {
+            const fileId = mediaUrl.split('id=')[1];
+            await deleteFileFromGoogleDrive(fileId);
+        }
+    }
+
+    await post.deleteOne();
+    return res.status(200).json({ message: 'Post deleted successfully' });
+};
+
+module.exports = { getPosts, createPost, updatePost, deletePost };

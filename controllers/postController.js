@@ -16,7 +16,7 @@ const getPosts = async (req, res) => {
 
 const createPost = async (req, res) => {
     const { userId, content } = req.body;
-    const mediaFiles = req.files || (req.file ? [req.file] : []); // Handle single or multiple files
+    const mediaFiles = req.files; // Handle single or multiple files
 
     const user = await User.findById(userId).exec();
     if (!user) {
@@ -121,11 +121,7 @@ const updatePost = async (req, res) => {
 };
 
 const deletePost = async (req, res) => {
-    console.log(req.params);
-
     const { postId, username } = req.params;
-
-    console.log('username from requested params', username);
 
     // Find the user by username to verify ownership
     const user = await User.findOne({ username }).exec();
@@ -148,8 +144,15 @@ const deletePost = async (req, res) => {
             .json({ message: 'You are not authorized to delete this post' });
     }
 
-    if (post.media && post.media.length > 0) {
-        for (const mediaUrl of post.media) {
+    if (post.media.image.length > 0) {
+        for (const mediaUrl of post.media.image) {
+            const fileId = mediaUrl.split('id=')[1];
+            await deleteFileFromGoogleDrive(fileId);
+        }
+    }
+
+    if (post.media.video.length > 0) {
+        for (const mediaUrl of post.media.video) {
             const fileId = mediaUrl.split('id=')[1];
             await deleteFileFromGoogleDrive(fileId);
         }

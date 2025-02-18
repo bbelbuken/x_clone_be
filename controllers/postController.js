@@ -6,7 +6,7 @@ const {
 } = require('../utils/googleDriveHelper');
 
 const getPosts = async (req, res) => {
-    const posts = await Post.find().lean().populate('UserId', 'username');
+    const posts = await Post.find().lean().populate('userId', 'username');
     if (!posts?.length) {
         return res.status(404).json({ message: 'No posts found' });
     }
@@ -111,11 +111,14 @@ const updatePost = async (req, res) => {
 
 const deletePost = async (req, res) => {
     const { postId, username } = req.params;
-    const userId = req.body; // ! change this to req.userID with JWT AUTH
+
+    console.log('username from requested params', username);
 
     // Find the user by username to verify ownership
     const user = await User.findOne({ username }).exec();
     if (!user) {
+        console.log('user not found with a username', username);
+
         return res.status(404).json({ message: 'User not found' });
     }
 
@@ -133,7 +136,7 @@ const deletePost = async (req, res) => {
     }
 
     if (post.media && post.media.length > 0) {
-        for (const mediaUrl of post.nedia) {
+        for (const mediaUrl of post.media) {
             const fileId = mediaUrl.split('id=')[1];
             await deleteFileFromGoogleDrive(fileId);
         }

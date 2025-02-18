@@ -16,34 +16,36 @@ const getPosts = async (req, res) => {
 
 const createPost = async (req, res) => {
     const { userId, content } = req.body;
-    const mediaFiles = req.files || [];
+    const mediaFiles = req.files || (req.file ? [req.file] : []); // Handle single or multiple files
 
     const user = await User.findById(userId).exec();
     if (!user) {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    let mediaUrls = [];
+    let mediaUrls = {
+        image: '',
+        video: '',
+    };
+
     if (mediaFiles.length > 0) {
-        for (const file of mediaFiles) {
-            const mediaUrl = await uploadFilesToGoogleDrive(
-                file,
-                process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
-            );
-            mediaUrls.push(mediaUrl);
-        }
+        // Handle multiple or single file upload
+        uploadedUrls = await uploadFilesToGoogleDrive(
+            mediaFiles,
+            process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
+        );
     }
 
     const post = await Post.create({
         content,
         userId,
-        media: mediaUrls,
+        media: mediaUrls, // Store URLs of uploaded files
     });
 
     if (post) {
-        return res.status(201).json({ message: 'New note created', post });
+        return res.status(201).json({ message: 'New post created', post });
     } else {
-        return res.status(400).json({ message: 'Invalid note data received' });
+        return res.status(400).json({ message: 'Invalid post data received' });
     }
 };
 

@@ -1,6 +1,9 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
-const { uploadFilesToGoogleDrive } = require('../utils/googleDriveHelper');
+const {
+    uploadFilesToGoogleDrive,
+    deleteFileFromGoogleDrive,
+} = require('../utils/googleDriveHelper');
 
 const getPosts = async (req, res) => {
     const posts = await Post.find().lean().populate('UserId', 'username');
@@ -45,5 +48,63 @@ const createPost = async (req, res) => {
 };
 
 const updatePost = async (req, res) => {
-    const { Post._id: postId, content, media } = req.body;
+    const { postId, username } = req.params;
+    const { content, mediaFiles, deleteMediaIds } = req.body;
+
+    if (!postId || !username) {
+        return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const user = await User.findOne({ username }).exec();
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    }
+
+    const post = await Post.findById({ postId }).exec();
+    if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    // check if user is verified
+    if (user._id.toString() !== post.userId.toString() || !user.verified) {
+        return res.status(403).json({
+            message:
+                'You are not authorized to edit this post or you are not a verified user',
+        });
+    }
+
+    // 1. Handle deletion of media
+    if (deleteMediaIds && deleteMediaIds.length > 0) {
+        for (const mediaUrl of deleteMediaIds) {
+            const fileId = mediaUrl.split('id=')[1]; // Extract the fileId from the URL
+            await deleteFileFromGoogleDrive(fileId); // Delete the file from Google Drive
+        }
+        // Remove the deleted media from post.media array
+        post.media = post.media.filter(
+            (mediaUrl) => !deleteMediaIds.includes(mediaUrl)
+        );
+    }
+
+    // 2. Handle adding new media
+    if (mediaFiles && mediaFiles.length > 0) {
+        const totalMedia = post.media.length + mediaFiles.length;
+        if (totalMedia > 4) {
+            return res.status(400).json({
+                message: 'Maximum 4 media files are allowed per post.',
+            });
+        }
+
+        const newMediaUrls = await uploadFilesToGoogleDrive(
+            mediaFiles,
+            process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
+        );
+        post.media.push(...newMediaUrls); // Add new media URLs to the existing media array
+    }
+
+    post.content = content || post.content;
+    const updatedPost = await post.save();
+
+    return res
+        .status(200)
+        .json({ message: 'Post updated successfully', post: updatedPost });
 };

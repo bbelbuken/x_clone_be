@@ -31,6 +31,7 @@ app.use('/', require('./routes/root'));
 app.use('/users', require('./routes/userRoutes'));
 app.use('/:username', require('./routes/postRoutes')); // ! check postRoutes
 app.use('/i/premium_sign_up', require('./routes/subscriptionRoutes'));
+app.use('/i/flow', require('./routes/authRoutes'));
 
 app.all('*', (req, res) => {
     res.status(404);

@@ -126,8 +126,6 @@ const deletePost = async (req, res) => {
     // Find the user by username to verify ownership
     const user = await User.findOne({ username }).exec();
     if (!user) {
-        console.log('user not found with a username', username);
-
         return res.status(404).json({ message: 'User not found' });
     }
 

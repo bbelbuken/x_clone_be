@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const {
     deleteFileFromGoogleDrive,
     uploadFileToGoogleDrive,
@@ -34,12 +35,36 @@ const createUser = async (req, res) => {
     // * hash password
     const hashedPwd = await bcrypt.hash(password, 10); // salt rounds
 
-    const user = await User.create({ username, password: hashedPwd });
-    if (user) {
-        res.status(201).json({ message: `New user ${username} created` });
-    } else {
+    const newUser = await User.create({ username, password: hashedPwd });
+    if (!newUser) {
         res.status(400).json({ message: 'Invalid user data received' });
     }
+
+    const accessToken = jwt.sign(
+        {
+            UserInfo: { username: newUser.username },
+        },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: '15m' }
+    );
+
+    const refreshToken = jwt.sign(
+        { username: newUser.username },
+        process.env.REFRESH_TOKEN_SECRET,
+        { expiresIn: '7d' }
+    );
+
+    res.cookie('jwt', refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'None',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(201).json({
+        message: `New user ${username} create`,
+        accessToken,
+    });
 };
 
 const updateUser = async (req, res) => {

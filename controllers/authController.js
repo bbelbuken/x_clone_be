@@ -21,7 +21,6 @@ const login = async (req, res) => {
         {
             UserInfo: {
                 username: foundUser.username,
-                verified: foundUser.verified,
             },
         },
         process.env.ACCESS_TOKEN_SECRET,
@@ -67,7 +66,6 @@ const refresh = (req, res) => {
                 {
                     UserInfo: {
                         username: foundUser.username,
-                        verified: foundUser.verified,
                     },
                 },
                 process.env.ACCESS_TOKEN_SECRET,

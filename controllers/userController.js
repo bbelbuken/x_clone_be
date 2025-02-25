@@ -15,13 +15,15 @@ const getUser = async (req, res) => {
 };
 
 const createUser = async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
+    const { username, password, email, dateOfBirth } = req.body;
+    if (!username || !password || !email || !dateOfBirth) {
         return res.status(400).json({ message: 'All fields are required' });
     }
 
     // ? duplicate
-    const duplicate = await User.findOne({ username })
+    const duplicate = await User.findOne({
+        $or: [{ username }, { email }],
+    })
         .collation({
             locale: 'en',
             strength: 2,
@@ -29,7 +31,7 @@ const createUser = async (req, res) => {
         .lean()
         .exec();
     if (duplicate) {
-        return res.status(409).json({ message: 'Duplicate username' });
+        return res.status(409).json({ message: 'Duplicate username or email' });
     }
 
     // * hash password
@@ -72,6 +74,8 @@ const updateUser = async (req, res) => {
         id,
         username,
         password,
+        email,
+        dateOfBirth,
         fullname,
         verified,
         bio,
@@ -107,6 +111,8 @@ const updateUser = async (req, res) => {
         user.username = username;
     }
 
+    if (email) user.email = email;
+    if (dateOfBirth) user.dateOfBirth = dateOfBirth;
     if (fullname) user.fullname = fullname;
     if (verified !== undefined) user.verified = verified;
     if (req.body.hasOwnProperty('bio')) user.bio = bio;

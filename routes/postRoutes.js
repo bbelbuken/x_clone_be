@@ -6,6 +6,7 @@ const verifyJWT = require('../middlewares/verifyJWT');
 
 router
     .route('/')
+    .get(postController.getPosts)
     .post(verifyJWT, upload.array('mediaFiles', 4), postController.createPost);
 
 router

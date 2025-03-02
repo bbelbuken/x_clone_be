@@ -1,10 +1,10 @@
 const express = require('express');
-const router = express.Router();
+const router = express.Router({ mergeParams: true }); // ! important
 const userController = require('../controllers/userController');
 const { upload } = require('../middlewares/multer');
 const verifyJWT = require('../middlewares/verifyJWT');
 
-router.use(verifyJWT);
+// router.use(verifyJWT);
 
 router
     .route('/')

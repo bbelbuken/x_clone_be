@@ -37,7 +37,12 @@ const createUser = async (req, res) => {
     // * hash password
     const hashedPwd = await bcrypt.hash(password, 10); // salt rounds
 
-    const newUser = await User.create({ username, password: hashedPwd });
+    const newUser = await User.create({
+        username,
+        password: hashedPwd,
+        email,
+        dateOfBirth,
+    });
     if (!newUser) {
         res.status(400).json({ message: 'Invalid user data received' });
     }

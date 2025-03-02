@@ -6,7 +6,7 @@ const {
 } = require('../utils/googleDriveHelper');
 
 const getPosts = async (req, res) => {
-    const posts = await Post.find().lean().populate('userId', 'username');
+    const posts = await Post.find().lean();
     if (!posts?.length) {
         return res.status(404).json({ message: 'No posts found' });
     }

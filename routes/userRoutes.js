@@ -4,13 +4,15 @@ const userController = require('../controllers/userController');
 const { upload } = require('../middlewares/multer');
 const verifyJWT = require('../middlewares/verifyJWT');
 
-router.use(verifyJWT);
+// router.use(verifyJWT);
 
 router
     .route('/')
     .get(userController.getUser)
     .patch(userController.updateUser)
     .delete(userController.deleteUser);
+
+router.route('/:userId').get(userController.getUserById);
 
 router
     .route('/:username/upload_avatar')

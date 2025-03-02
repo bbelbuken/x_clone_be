@@ -14,6 +14,15 @@ const getUser = async (req, res) => {
     res.json(users);
 };
 
+const getUserById = async (req, res) => {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    if (!user) {
+        return res.status(404).json({ message: 'No users found' });
+    }
+    res.json(user);
+};
+
 const createUser = async (req, res) => {
     const { username, password, email, dateOfBirth } = req.body;
     if (!username || !password || !email || !dateOfBirth) {
@@ -277,6 +286,7 @@ const deleteHeaderFromUser = async (req, res) => {
 
 module.exports = {
     getUser,
+    getUserById,
     createUser,
     updateUser,
     deleteUser,

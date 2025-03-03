@@ -25,8 +25,8 @@ const getUserById = async (req, res) => {
 };
 
 const createUser = async (req, res) => {
-    const { username, password, email, dateOfBirth } = req.body;
-    if (!username || !password || !email || !dateOfBirth) {
+    const { username, fullname, password, email, dateOfBirth } = req.body;
+    if (!username || !fullname || !password || !email || !dateOfBirth) {
         return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -49,6 +49,7 @@ const createUser = async (req, res) => {
 
     const newUser = await User.create({
         username,
+        fullname,
         password: hashedPwd,
         email,
         dateOfBirth,
@@ -79,7 +80,7 @@ const createUser = async (req, res) => {
     });
 
     res.status(201).json({
-        message: `New user ${username} create`,
+        message: `New user ${username} created`,
         accessToken,
     });
 };
@@ -167,9 +168,9 @@ const deleteUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    await user.deleteOne();
+    await Post.deleteMany({ userId: id });
 
-    await Note.deleteMany({ userId: id });
+    await user.deleteOne();
 
     res.json({
         message: `Username ${user.username} with ID ${user.id} deleted`,

@@ -3,6 +3,7 @@ const Post = require('../models/Post');
 const {
     uploadFilesToGoogleDrive,
     deleteFileFromGoogleDrive,
+    fetchImageFromGoogleDrive,
 } = require('../utils/googleDriveHelper');
 const redisClient = require('../config/redis');
 
@@ -16,25 +17,41 @@ const getPosts = async (req, res) => {
         posts.map(async (post) => {
             const user = await User.findById(post.userId);
             if (!user) {
-                throw new Error('User not found');
+                throw new Error('User not found'); // This will be caught by your error handler
             }
 
-            const avatarKey = `avatar:${user._id}`; // Use user._id as key for avatar in Redis
-            let cachedAvatar = await redisClient.get(avatarKey);
+            if (user.avatar) {
+                const avatarKey = `avatar:${user._id}`; // Use user._id as key for avatar in Redis
+                let cachedAvatar = await redisClient.get(avatarKey);
+                console.log('isAlreadyCached :', cachedAvatar);
 
-            if (!cachedAvatar) {
-                // fetching img data from dive
-                cachedAvatar = user.avatar;
+                if (!cachedAvatar) {
+                    // Fetching img data from Google Drive
+                    const imageData = await fetchImageFromGoogleDrive(
+                        user.avatar
+                    );
+                    console.log('ImageData :', imageData);
 
-                // Cache the avatar URL for future requests
-                await redisClient.set(avatarKey, cachedAvatar, { EX: 86400 });
+                    // Cache the avatar URL for future requests
+                    await redisClient.set(avatarKey, imageData, { EX: 86400 });
+
+                    cachedAvatar = imageData;
+                    console.log('CreatingCache : ', cachedAvatar);
+                }
+
+                // Return post with cached avatar URL
+                return {
+                    ...post,
+                    cachedAvatarUrl: `data:image/jpeg;base64,${cachedAvatar}`,
+                };
             }
 
-            //avatarUrl will be in the response body not in the post in the DB
-            return { ...post, AvatarUrl: cachedAvatar };
+            // If there's no avatar, just return the post without the avatar URL
+            return post;
         })
     );
 
+    // Send the final response once all posts are processed
     res.status(200).json(postsWithCachedFiles);
 };
 

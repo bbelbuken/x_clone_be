@@ -1,5 +1,6 @@
 const { drive } = require('../config/googleDriveConfig');
 const streamifier = require('streamifier');
+const https = require('https');
 
 const uploadFileToGoogleDrive = async (file, folder) => {
     if (!file.originalname) {

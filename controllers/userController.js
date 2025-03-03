@@ -210,6 +210,12 @@ const uploadAvatarToUser = async (req, res) => {
         return res.status(400).json({ message: 'No file uploaded' });
     }
 
+    if (user.avatar) {
+        return res
+            .status(409)
+            .json({ message: `${username} has already got an avatar` });
+    }
+
     // Upload the file to drive and store the URL
     const avatarUrl = await uploadFileToGoogleDrive(
         req.file,
@@ -237,6 +243,12 @@ const uploadHeaderToUser = async (req, res) => {
     // Check if a file is uploaded
     if (!req.file) {
         return res.status(400).json({ message: 'No header file uploaded' });
+    }
+
+    if (user.header_photo) {
+        return res
+            .status(409)
+            .json({ message: `${username} has already got an header photo` });
     }
 
     // Upload the file to drive and store the URL

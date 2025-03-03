@@ -27,6 +27,8 @@ const getUserById = async (req, res) => {
 const createUser = async (req, res) => {
     const { username, fullname, password, email, dateOfBirth } = req.body;
     if (!username || !fullname || !password || !email || !dateOfBirth) {
+        console.log('req.body:', req.body);
+        console.log('req.file:', req.file);
         return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -44,6 +46,15 @@ const createUser = async (req, res) => {
         return res.status(409).json({ message: 'Duplicate username or email' });
     }
 
+    let avatarUrl = '';
+
+    if (req.file) {
+        avatarUrl = await uploadFileToGoogleDrive(
+            req.file,
+            process.env.GOOGLE_DRIVE_USERAVATAR_FOLDERID
+        );
+    }
+
     // * hash password
     const hashedPwd = await bcrypt.hash(password, 10); // salt rounds
 
@@ -53,6 +64,7 @@ const createUser = async (req, res) => {
         password: hashedPwd,
         email,
         dateOfBirth,
+        avatar: avatarUrl,
     });
     if (!newUser) {
         res.status(400).json({ message: 'Invalid user data received' });
@@ -184,7 +196,6 @@ const deleteUser = async (req, res) => {
         } else {
             console.error('Invalid header URL formate');
         }
-        await deleteFileFromGoogleDrive(headerUrl);
     }
 
     await Post.deleteMany({ userId: id });

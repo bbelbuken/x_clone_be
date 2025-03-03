@@ -12,7 +12,30 @@ const getPosts = async (req, res) => {
         return res.status(404).json({ message: 'No posts found' });
     }
 
-    res.status(200).json(posts);
+    const postsWithCachedFiles = await Promise.all(
+        posts.map(async (post) => {
+            const user = await User.findById(post.userId);
+
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            const avatarKey = `avatar:${user._id}`; // Use user._id as key for avatar in Redis
+            let cachedAvatar = await redisClient.get(avatarKey);
+
+            if (!cachedAvatar) {
+                cachedAvatar = user.avatar;
+
+                // Cache the avatar URL for future requests
+                await redisClient.set(avatarKey, cachedAvatar, { EX: 86400 });
+            }
+
+            //avatarUrl will be in the response body not in the post in the DB
+            return { ...post, avatarUrl: cachedAvatar };
+        })
+    );
+
+    res.status(200).json(postsWithCachedFiles);
 };
 
 const createPost = async (req, res) => {

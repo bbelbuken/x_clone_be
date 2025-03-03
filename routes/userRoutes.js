@@ -8,7 +8,7 @@ const verifyJWT = require('../middlewares/verifyJWT');
 
 router
     .route('/')
-    .get(userController.getUser)
+    .get(userController.getUsers)
     .patch(userController.updateUser)
     .delete(userController.deleteUser);
 

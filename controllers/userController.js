@@ -1,3 +1,4 @@
+const Post = require('../models/Post');
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -6,7 +7,7 @@ const {
     uploadFileToGoogleDrive,
 } = require('../utils/googleDriveHelper');
 
-const getUser = async (req, res) => {
+const getUsers = async (req, res) => {
     const users = await User.find().select('-password').lean();
     if (!users?.length) {
         return res.status(404).json({ message: 'No users found' });
@@ -168,6 +169,8 @@ const deleteUser = async (req, res) => {
 
     await user.deleteOne();
 
+    await Note.deleteMany({ userId: id });
+
     res.json({
         message: `Username ${user.username} with ID ${user.id} deleted`,
     });
@@ -285,7 +288,7 @@ const deleteHeaderFromUser = async (req, res) => {
 };
 
 module.exports = {
-    getUser,
+    getUsers,
     getUserById,
     createUser,
     updateUser,

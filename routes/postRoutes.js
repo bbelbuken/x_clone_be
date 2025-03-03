@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router({ mergeParams: true }); // ! important
+const router = express.Router();
 const postController = require('../controllers/postController');
 const { upload } = require('../middlewares/multer'); // Adjust the path if necessary
 const verifyJWT = require('../middlewares/verifyJWT');

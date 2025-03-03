@@ -4,6 +4,7 @@ const {
     uploadFilesToGoogleDrive,
     deleteFileFromGoogleDrive,
 } = require('../utils/googleDriveHelper');
+const redisClient = require('../config/redis');
 
 const getPosts = async (req, res) => {
     const posts = await Post.find().lean();

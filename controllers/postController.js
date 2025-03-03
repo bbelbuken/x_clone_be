@@ -15,7 +15,6 @@ const getPosts = async (req, res) => {
     const postsWithCachedFiles = await Promise.all(
         posts.map(async (post) => {
             const user = await User.findById(post.userId);
-
             if (!user) {
                 throw new Error('User not found');
             }
@@ -24,6 +23,7 @@ const getPosts = async (req, res) => {
             let cachedAvatar = await redisClient.get(avatarKey);
 
             if (!cachedAvatar) {
+                // fetching img data from dive
                 cachedAvatar = user.avatar;
 
                 // Cache the avatar URL for future requests
@@ -31,7 +31,7 @@ const getPosts = async (req, res) => {
             }
 
             //avatarUrl will be in the response body not in the post in the DB
-            return { ...post, avatarUrl: cachedAvatar };
+            return { ...post, AvatarUrl: cachedAvatar };
         })
     );
 

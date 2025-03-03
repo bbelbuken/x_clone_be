@@ -67,8 +67,33 @@ const deleteFileFromGoogleDrive = async (fileId) => {
     }
 };
 
+const fetchImageFromGoogleDrive = (url) => {
+    return new Promise((resolve, reject) => {
+        https
+            .get(url, (response) => {
+                let data = [];
+
+                // Collect the image data chunks
+                response.on('data', (chunk) => {
+                    data.push(chunk);
+                });
+
+                // Convert the image data to base64
+                response.on('end', () => {
+                    const buffer = Buffer.concat(data);
+                    const base64Image = buffer.toString('base64');
+                    resolve(base64Image);
+                });
+            })
+            .on('error', (err) => {
+                reject(err);
+            });
+    });
+};
+
 module.exports = {
     deleteFileFromGoogleDrive,
     uploadFilesToGoogleDrive,
     uploadFileToGoogleDrive,
+    fetchImageFromGoogleDrive,
 };

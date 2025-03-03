@@ -168,8 +168,26 @@ const deleteUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    await Post.deleteMany({ userId: id });
+    if (user.avatar) {
+        const avatarUrl = user.avatar.split('id=')[1];
+        if (avatarUrl) {
+            await deleteFileFromGoogleDrive(avatarUrl);
+        } else {
+            console.error('Invalid avatar URL formate');
+        }
+    }
 
+    if (user.header_photo) {
+        const headerUrl = user.header_photo.split('id=')[1];
+        if (headerUrl) {
+            await deleteFileFromGoogleDrive(headerUrl);
+        } else {
+            console.error('Invalid header URL formate');
+        }
+        await deleteFileFromGoogleDrive(headerUrl);
+    }
+
+    await Post.deleteMany({ userId: id });
     await user.deleteOne();
 
     res.json({

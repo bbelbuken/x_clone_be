@@ -230,8 +230,6 @@ const uploadAvatarToUser = async (req, res) => {
         await clearAvatar(user); // Use clearAvatar here
     }
 
-    await user.save();
-
     res.status(200).json({
         message: 'Avatar uploaded successfully',
         avatarUrl: user.avatar,

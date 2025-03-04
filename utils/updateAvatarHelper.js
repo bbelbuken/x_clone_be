@@ -6,8 +6,9 @@ const {
 const redisClient = require('../config/redis');
 
 const updateAvatar = async (user, newAvatarFile) => {
+    const avatarFileId = user.avatar.split('id=')[1];
     if (user.avatar) {
-        await deleteFileFromGoogleDrive(user.avatar);
+        await deleteFileFromGoogleDrive(avatarFileId);
     }
 
     const newAvatarUrl = await uploadFileToGoogleDrive(
@@ -26,12 +27,15 @@ const updateAvatar = async (user, newAvatarFile) => {
 
     user.cachedAvatarUrl = `data:image/jpeg;base64,${imageData}`;
 
+    await user.save();
+
     return user;
 };
 
 const clearAvatar = async (user) => {
     if (user.avatar) {
-        await deleteFileFromGoogleDrive(user.avatar);
+        const avatarFileId = user.avatar.split('id=')[1];
+        await deleteFileFromGoogleDrive(avatarFileId);
     }
 
     user.avatar = '';
@@ -41,6 +45,8 @@ const clearAvatar = async (user) => {
     await redisClient.del(avatarKey);
 
     user.cachedAvatarUrl = '';
+
+    await user.save();
 
     return user;
 };

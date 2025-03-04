@@ -4,6 +4,7 @@ const {
     uploadFilesToGoogleDrive,
     deleteFileFromGoogleDrive,
     fetchImageFromGoogleDrive,
+    fetchVideoFromGoogleDrive,
 } = require('../utils/googleDriveHelper');
 const redisClient = require('../config/redis');
 
@@ -19,7 +20,6 @@ const getPosts = async (req, res) => {
                 const cachedImages = await Promise.all(
                     post.media.image.map(async (image, index) => {
                         const imgKey = `img:${post._id}:${index}`;
-
                         let cachedImg = await redisClient.get(imgKey);
 
                         if (!cachedImg) {
@@ -40,6 +40,36 @@ const getPosts = async (req, res) => {
 
                 post.cachedImages = cachedImages;
             }
+
+            posts.map(async (post) => {
+                if (post.media?.video && post.media.video.length > 0) {
+                    const cachedVideos = await Promise.all(
+                        post.media.video.map(async (videoUrl, index) => {
+                            const videoKey = `video:${post._id}:${index}`;
+                            let cachedVideo = await redisClient.get(videoKey);
+
+                            if (!cachedVideo) {
+                                const videoData =
+                                    await fetchVideoFromGoogleDrive(videoUrl);
+
+                                // Cache the video data (you can decide on expiration time)
+                                await redisClient.set(videoKey, videoData, {
+                                    EX: 3600,
+                                });
+
+                                cachedVideo = videoData;
+                            }
+
+                            // Return video buffer data directly (instead of base64-encoded data like images)
+                            return cachedVideo; // Return the video buffer
+                        })
+                    );
+
+                    post.cachedVideos = cachedVideos;
+                }
+
+                return post; // Return the post with cached videos
+            });
 
             // Process user avatar
             const user = await User.findById(post.userId);

@@ -28,7 +28,7 @@ const getPosts = async (req, res) => {
                             );
 
                             await redisClient.set(imgKey, imageData, {
-                                EX: 86400,
+                                EX: 3600,
                             });
 
                             cachedImg = imageData;
@@ -59,7 +59,7 @@ const getPosts = async (req, res) => {
                     );
 
                     // Cache the avatar URL for future requests
-                    await redisClient.set(avatarKey, imageData, { EX: 86400 });
+                    await redisClient.set(avatarKey, imageData, { EX: 3600 });
 
                     cachedAvatar = imageData;
                 }
@@ -184,7 +184,8 @@ const updatePost = async (req, res) => {
 };
 
 const deletePost = async (req, res) => {
-    const { postId, username } = req.params;
+    const { postId } = req.params;
+    const { username } = req.body;
 
     // Find the user by username to verify ownership
     const user = await User.findOne({ username }).exec();
@@ -205,18 +206,28 @@ const deletePost = async (req, res) => {
             .json({ message: 'You are not authorized to delete this post' });
     }
 
-    if (post.media.image.length > 0) {
+    if (post.media.image && post.media.image.length > 0) {
         for (const mediaUrl of post.media.image) {
             const fileId = mediaUrl.split('id=')[1];
             await deleteFileFromGoogleDrive(fileId);
         }
     }
 
-    if (post.media.video.length > 0) {
+    if (post.media.video && post.media.video.length > 0) {
         for (const mediaUrl of post.media.video) {
             const fileId = mediaUrl.split('id=')[1];
             await deleteFileFromGoogleDrive(fileId);
         }
+    }
+
+    // invalidate redis cache for the post image
+    if (post.media.image && post.media.image.length > 0) {
+        await Promise.all(
+            post.media.image.map(async (_, index) => {
+                const imgKey = `img:${post._id}:${index}`;
+                await redisClient.del(imgKey);
+            })
+        );
     }
 
     await post.deleteOne();

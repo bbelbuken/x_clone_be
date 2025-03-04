@@ -6,6 +6,7 @@ const {
     deleteFileFromGoogleDrive,
     uploadFileToGoogleDrive,
 } = require('../utils/googleDriveHelper');
+const redisClient = require('../config/redis');
 
 const getUsers = async (req, res) => {
     const users = await User.find().select('-password').lean();
@@ -183,6 +184,8 @@ const deleteUser = async (req, res) => {
     if (user.avatar) {
         const avatarUrl = user.avatar.split('id=')[1];
         if (avatarUrl) {
+            const avatarKey = `avatar:${user._id}`;
+            await redisClient.del(avatarKey);
             await deleteFileFromGoogleDrive(avatarUrl);
         } else {
             console.error('Invalid avatar URL formate');

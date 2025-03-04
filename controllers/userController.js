@@ -7,6 +7,7 @@ const {
     uploadFileToGoogleDrive,
 } = require('../utils/googleDriveHelper');
 const redisClient = require('../config/redis');
+const { updateAvatar, clearAvatar } = require('../utils/updateAvatarHelper');
 
 const getUsers = async (req, res) => {
     const users = await User.find().select('-password').lean();
@@ -140,6 +141,24 @@ const updateUser = async (req, res) => {
         user.username = username;
     }
 
+    //  avatar update
+    if (avatar && avatar !== user.avatar) {
+        await updateAvatar(user, avatar);
+    } else if (avatar === '' && user.avatar !== '') {
+        await clearAvatar(user);
+    }
+
+    //  header photo update
+    if (header_photo && header_photo !== user.header_photo) {
+        if (user.header_photo) {
+            await deleteFileFromGoogleDrive(user.header_photo);
+        }
+        user.header_photo = header_photo;
+    } else if (header_photo === '' && user.header_photo !== '') {
+        await deleteFileFromGoogleDrive(user.header_photo);
+        user.header_photo = '';
+    }
+
     if (email) user.email = email;
     if (dateOfBirth) user.dateOfBirth = dateOfBirth;
     if (fullname) user.fullname = fullname;
@@ -148,22 +167,6 @@ const updateUser = async (req, res) => {
     if (req.body.hasOwnProperty('location')) user.location = location;
     if (req.body.hasOwnProperty('website')) user.website = website;
     if (password) user.password = await bcrypt.hash(password, 10);
-
-    if (avatar && avatar !== user.avatar) {
-        await deleteFileFromGoogleDrive(user.avatar);
-        user.avatar = avatar;
-    } else if (avatar === '' && user.avatar !== '') {
-        await deleteFileFromGoogleDrive(user.avatar);
-        user.avatar = '';
-    }
-
-    if (header_photo && header_photo !== user.header_photo) {
-        await deleteFileFromGoogleDrive(user.header_photo);
-        user.header_photo = header_photo;
-    } else if (header_photo === '' && user.header_photo !== '') {
-        await deleteFileFromGoogleDrive(user.header_photo);
-        user.header_photo = '';
-    }
 
     const updatedUser = await user.save();
 
@@ -181,27 +184,25 @@ const deleteUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
+    // Clear the avatar using clearAvatar
     if (user.avatar) {
-        const avatarUrl = user.avatar.split('id=')[1];
-        if (avatarUrl) {
-            const avatarKey = `avatar:${user._id}`;
-            await redisClient.del(avatarKey);
-            await deleteFileFromGoogleDrive(avatarUrl);
-        } else {
-            console.error('Invalid avatar URL formate');
-        }
+        await clearAvatar(user);
     }
 
+    // Clear the header photo
     if (user.header_photo) {
         const headerUrl = user.header_photo.split('id=')[1];
         if (headerUrl) {
             await deleteFileFromGoogleDrive(headerUrl);
         } else {
-            console.error('Invalid header URL formate');
+            console.error('Invalid header URL format');
         }
     }
 
+    // Delete user's posts
     await Post.deleteMany({ userId: id });
+
+    // Delete the user
     await user.deleteOne();
 
     res.json({
@@ -219,30 +220,21 @@ const uploadAvatarToUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    // ? Check if a file is uploaded
     if (!req.file) {
         return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    if (user.avatar) {
-        return res
-            .status(409)
-            .json({ message: `${username} has already got an avatar` });
+    if (req.file && req.file !== user.avatar) {
+        await updateAvatar(user, req.file);
+    } else if (req.file === '' && user.avatar !== '') {
+        await clearAvatar(user); // Use clearAvatar here
     }
 
-    // Upload the file to drive and store the URL
-    const avatarUrl = await uploadFileToGoogleDrive(
-        req.file,
-        process.env.GOOGLE_DRIVE_USERAVATAR_FOLDERID
-    );
-
-    // Store the Google Drive URL in the user's header field
-    user.avatar = avatarUrl;
     await user.save();
 
     res.status(200).json({
         message: 'Avatar uploaded successfully',
-        avatarUrl: avatarUrl, // Return the Google Drive URL of the uploaded avatar
+        avatarUrl: user.avatar,
     });
 };
 
@@ -254,30 +246,17 @@ const uploadHeaderToUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check if a file is uploaded
     if (!req.file) {
         return res.status(400).json({ message: 'No header file uploaded' });
     }
 
-    if (user.header_photo) {
-        return res
-            .status(409)
-            .json({ message: `${username} has already got an header photo` });
-    }
+    await updateAvatar(user, req.file);
 
-    // Upload the file to drive and store the URL
-    const headerUrl = await uploadFileToGoogleDrive(
-        req.file,
-        process.env.GOOGLE_DRIVE_USERHEADER_FOLDERID
-    );
-
-    // Store the Google Drive URL in the user's header field
-    user.header_photo = headerUrl;
     await user.save();
 
     res.status(200).json({
-        message: 'Header uploaded successfully',
-        headerUrl: headerUrl, // Return the Google Drive URL of the uploaded HEADER
+        message: 'Avatar uploaded successfully',
+        avatarUrl: user.avatar,
     });
 };
 
@@ -289,20 +268,11 @@ const deleteAvatarFromUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    // ? Check if the user already has an avatar
     if (!user.avatar) {
         return res.status(400).json({ message: 'No avatar to delete' });
     }
 
-    // Extract the file ID from the Google Drive URL
-    const avatarFileId = user.avatar.split('id=')[1]; // Extract the file ID from the URL
-
-    // Delete the avatar file from Google Drive
-    await deleteFileFromGoogleDrive(avatarFileId);
-
-    // Remove the avatar field from the user's document
-    user.avatar = '';
-    await user.save();
+    await clearAvatar(user);
 
     res.status(200).json({ message: 'Avatar deleted successfully' });
 };
@@ -320,10 +290,8 @@ const deleteHeaderFromUser = async (req, res) => {
         return res.status(400).json({ message: 'No header photo to delete' });
     }
 
-    // Extract the file ID from the Google Drive URL
-    const headerPhotoFileId = user.header_photo.split('id=')[1]; // Extract the file ID from the URL
+    const headerPhotoFileId = user.header_photo.split('id=')[1];
 
-    // Delete the header photo file from Google Drive
     await deleteFileFromGoogleDrive(headerPhotoFileId);
 
     user.header_photo = '';

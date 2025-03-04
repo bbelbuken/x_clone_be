@@ -7,11 +7,17 @@ const verifyJWT = require('../middlewares/verifyJWT');
 router
     .route('/')
     .get(postController.getPosts)
-    .post(verifyJWT, upload.array('mediaFiles', 4), postController.createPost);
+    .post(
+        /* verifyJWT,  */ upload.array('mediaFiles', 4),
+        postController.createPost
+    );
 
 router
     .route('/status/:postId')
-    .patch(verifyJWT, upload.array('mediaFiles', 4), postController.updatePost)
-    .delete(verifyJWT, postController.deletePost);
+    .patch(
+        /* verifyJWT, */ upload.array('mediaFiles', 4),
+        postController.updatePost
+    )
+    .delete(/* verifyJWT,  */ postController.deletePost);
 
 module.exports = router;

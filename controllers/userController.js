@@ -202,7 +202,7 @@ const deleteUser = async (req, res) => {
     await user.deleteOne();
 
     res.json({
-        message: `Username ${user.username} with ID ${user.id} deleted`,
+        message: `${user.username} deleted`,
     });
 };
 

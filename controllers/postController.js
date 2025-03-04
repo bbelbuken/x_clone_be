@@ -15,7 +15,35 @@ const getPosts = async (req, res) => {
 
     const postsWithCachedFiles = await Promise.all(
         posts.map(async (post) => {
+            if (post.media?.image && post.media.image.length > 0) {
+                const cachedImages = await Promise.all(
+                    post.media.image.map(async (image, index) => {
+                        const imgKey = `img:${post._id}:${index}`;
+
+                        let cachedImg = await redisClient.get(imgKey);
+
+                        if (!cachedImg) {
+                            const imageData = await fetchImageFromGoogleDrive(
+                                image
+                            );
+
+                            await redisClient.set(imgKey, imageData, {
+                                EX: 86400,
+                            });
+
+                            cachedImg = imageData;
+                        }
+
+                        return `data:image/jpeg;base64,${cachedImg}`; // Return base64-encoded image
+                    })
+                );
+
+                post.cachedImages = cachedImages;
+            }
+
+            // Process user avatar
             const user = await User.findById(post.userId);
+
             if (!user) {
                 throw new Error('User not found'); // This will be caught by your error handler
             }
@@ -23,30 +51,24 @@ const getPosts = async (req, res) => {
             if (user.avatar) {
                 const avatarKey = `avatar:${user._id}`; // Use user._id as key for avatar in Redis
                 let cachedAvatar = await redisClient.get(avatarKey);
-                console.log('isAlreadyCached :', cachedAvatar);
 
                 if (!cachedAvatar) {
                     // Fetching img data from Google Drive
                     const imageData = await fetchImageFromGoogleDrive(
                         user.avatar
                     );
-                    console.log('ImageData :', imageData);
 
                     // Cache the avatar URL for future requests
                     await redisClient.set(avatarKey, imageData, { EX: 86400 });
 
                     cachedAvatar = imageData;
-                    console.log('CreatingCache : ', cachedAvatar);
                 }
 
-                // Return post with cached avatar URL
-                return {
-                    ...post,
-                    cachedAvatarUrl: `data:image/jpeg;base64,${cachedAvatar}`,
-                };
+                // Add the cached avatar URL to the post object
+                post.cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
             }
 
-            // If there's no avatar, just return the post without the avatar URL
+            // Return the post with cached images and avatar (if available)
             return post;
         })
     );

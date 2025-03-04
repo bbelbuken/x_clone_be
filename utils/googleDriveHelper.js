@@ -72,19 +72,62 @@ const fetchImageFromGoogleDrive = (url) => {
     return new Promise((resolve, reject) => {
         https
             .get(url, (response) => {
-                let data = [];
+                if (response.statusCode === 303) {
+                    // Handle redirect
+                    const redirectUrl = response.headers.location;
 
-                // Collect the image data chunks
-                response.on('data', (chunk) => {
-                    data.push(chunk);
-                });
+                    // Fetch the image from the redirect URL
+                    https
+                        .get(redirectUrl, (redirectResponse) => {
+                            if (redirectResponse.statusCode !== 200) {
+                                return reject(
+                                    new Error(
+                                        `Failed to fetch image. Status code: ${redirectResponse.statusCode}`
+                                    )
+                                );
+                            }
 
-                // Convert the image data to base64
-                response.on('end', () => {
-                    const buffer = Buffer.concat(data);
-                    const base64Image = buffer.toString('base64');
-                    resolve(base64Image);
-                });
+                            let data = [];
+                            redirectResponse.on('data', (chunk) => {
+                                data.push(chunk);
+                            });
+
+                            redirectResponse.on('end', () => {
+                                const buffer = Buffer.concat(data);
+                                const base64Image = buffer.toString('base64');
+                                if (!base64Image) {
+                                    return reject(
+                                        new Error('Image data is empty')
+                                    );
+                                }
+                                resolve(base64Image);
+                            });
+                        })
+                        .on('error', (err) => {
+                            reject(err);
+                        });
+                } else if (response.statusCode !== 200) {
+                    return reject(
+                        new Error(
+                            `Failed to fetch image. Status code: ${response.statusCode}`
+                        )
+                    );
+                } else {
+                    // Handle direct response
+                    let data = [];
+                    response.on('data', (chunk) => {
+                        data.push(chunk);
+                    });
+
+                    response.on('end', () => {
+                        const buffer = Buffer.concat(data);
+                        const base64Image = buffer.toString('base64');
+                        if (!base64Image) {
+                            return reject(new Error('Image data is empty'));
+                        }
+                        resolve(base64Image);
+                    });
+                }
             })
             .on('error', (err) => {
                 reject(err);

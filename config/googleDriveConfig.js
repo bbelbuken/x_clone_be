@@ -1,14 +1,18 @@
 const { google } = require('googleapis');
 
-// Load the keyfile path from the environment variables
-const KEYFILE = process.env.GOOGLE_DRIVE_KEYFILE_PATH;
+const CLIENT_ID = process.env.GOOGLE_DRIVE_CLIENT_ID;
+const CLIENT_SECRET = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
+const REDIRECT_URI = process.env.REDIRECT_URI;
+const REFRESH_TOKEN = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
 
-// Set up Google Auth and Drive API client
-const auth = new google.auth.GoogleAuth({
-    keyFile: KEYFILE,
-    scopes: ['https://www.googleapis.com/auth/drive.file'], // Adjust the scope based on your needs
-});
+const oAuth2Client = new google.auth.OAuth2(
+    CLIENT_ID,
+    CLIENT_SECRET,
+    REDIRECT_URI
+);
 
-const drive = google.drive({ version: 'v3', auth });
+oAuth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
+
+const drive = google.drive({ version: 'v3', auth: oAuth2Client });
 
 module.exports = { drive };

@@ -3,46 +3,77 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const login = async (req, res) => {
-    const { username, email, password } = req.body;
+    const { step, username, email, password } = req.body;
 
-    if (!password || (!username && !email)) {
-        return res.status(400).json({ message: 'All fields are required' });
+    if (step === 1) {
+        if (!username && !email) {
+            return res
+                .status(400)
+                .json({ message: 'Username or email is required' });
+        }
+
+        const foundUser = await User.findOne({
+            $or: [{ username: username }, { email: email }],
+        }).exec();
+
+        if (!foundUser) {
+            return res
+                .status(401)
+                .json({ message: "We couldn't find your account" });
+        }
+
+        return res
+            .status(200)
+            .json({ message: 'Account found', user: foundUser });
     }
-    const foundUser = await User.findOne({
-        $or: [{ username: username }, { email: email }],
-    }).exec();
 
-    if (!foundUser) {
-        return res.status(401).json({ message: 'Unauthorized' });
-    }
+    if (step === 2) {
+        if (!password) {
+            return res.status(400).json({ message: 'Password is required' });
+        }
 
-    const match = await bcrypt.compare(password, foundUser.password);
-    if (!match) return res.status(401).json({ message: 'Unauthorized' });
+        const foundUser = await User.findOne({
+            $or: [{ username: username }, { email: email }],
+        }).exec();
 
-    const accessToken = jwt.sign(
-        {
-            UserInfo: {
-                username: foundUser.username,
+        if (!foundUser) {
+            return res
+                .status(401)
+                .json({ message: "We couldn't find your account" });
+        }
+
+        const match = await bcrypt.compare(password, foundUser.password);
+        if (!match) {
+            return res.status(401).json({ message: 'Invalid password' });
+        }
+
+        const accessToken = jwt.sign(
+            {
+                UserInfo: {
+                    username: foundUser.username,
+                },
             },
-        },
-        process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: '1d' }
-    );
+            process.env.ACCESS_TOKEN_SECRET,
+            { expiresIn: '1d' }
+        );
 
-    const refreshToken = jwt.sign(
-        { username: foundUser.username },
-        process.env.REFRESH_TOKEN_SECRET,
-        { expiresIn: '7d' }
-    );
+        const refreshToken = jwt.sign(
+            { username: foundUser.username },
+            process.env.REFRESH_TOKEN_SECRET,
+            { expiresIn: '7d' }
+        );
 
-    res.cookie('jwt', refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'None',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+        res.cookie('jwt', refreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'None',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
 
-    res.json({ accessToken });
+        return res.json({ accessToken });
+    }
+
+    return res.status(400).json({ message: 'Invalid step' });
 };
 
 const refresh = (req, res) => {

@@ -3,13 +3,15 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const login = async (req, res) => {
-    const { username, password } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!username || !password) {
+    if (!password || (!username && !email)) {
         return res.status(400).json({ message: 'All fields are required' });
     }
+    const foundUser = await User.findOne({
+        $or: [{ username: username }, { email: email }],
+    }).exec();
 
-    const foundUser = await User.findOne({ username }).exec();
     if (!foundUser) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
@@ -24,7 +26,7 @@ const login = async (req, res) => {
             },
         },
         process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '1d' }
     );
 
     const refreshToken = jwt.sign(
@@ -69,7 +71,7 @@ const refresh = (req, res) => {
                     },
                 },
                 process.env.ACCESS_TOKEN_SECRET,
-                { expiresIn: '15m' }
+                { expiresIn: '1d' }
             );
             res.json({ accessToken });
         }

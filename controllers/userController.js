@@ -26,6 +26,18 @@ const getUserById = async (req, res) => {
     res.json(user);
 };
 
+const getCurrentAccount = async (req, res) => {
+    const { username } = req.params;
+    const user = await User.findOne({ username })
+        .select('-password')
+        .lean()
+        .exec();
+    if (!user) {
+        return res.status(404).json({ message: 'No users found' });
+    }
+    res.json(user);
+};
+
 const createUser = async (req, res) => {
     const { username, fullname, password, email, dateOfBirth } = req.body;
     if (!username || !fullname || !password || !email || !dateOfBirth) {
@@ -301,6 +313,7 @@ const deleteHeaderFromUser = async (req, res) => {
 module.exports = {
     getUsers,
     getUserById,
+    getCurrentAccount,
     createUser,
     updateUser,
     deleteUser,

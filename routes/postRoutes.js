@@ -10,14 +10,16 @@ router
     .post(
         /* verifyJWT, */ upload.array('mediaFiles', 4),
         postController.createPost
-    )
-    .delete(/* verifyJWT, */ postController.deletePost);
+    );
 
 router
-    .route('/status/:postId')
+    .route('/:postId')
+    .delete(/* verifyJWT, */ postController.deletePost)
     .patch(
         /* verifyJWT, */ upload.array('mediaFiles', 4),
         postController.updatePost
     );
+
+router.route('/:postId/like').patch(postController.likePost);
 
 module.exports = router;

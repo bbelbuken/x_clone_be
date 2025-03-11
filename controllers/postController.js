@@ -183,7 +183,7 @@ const updatePost = async (req, res) => {
 };
 
 const deletePost = async (req, res) => {
-    const { postId } = req.body;
+    const { postId } = req.params;
 
     // Find the post by ID
     const post = await Post.findById(postId).exec();
@@ -219,4 +219,27 @@ const deletePost = async (req, res) => {
     return res.status(200).json({ message: 'Post deleted successfully' });
 };
 
-module.exports = { getPosts, createPost, updatePost, deletePost };
+const likePost = async (req, res) => {
+    const { postId } = req.params;
+    const { userId } = req.body;
+
+    const post = await Post.findById(postId).exec();
+    if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    const userIndex = post.reactions.likedBy.indexOf(userId);
+
+    if (userIndex === -1) {
+        post.reactions.likedBy.push(userId);
+    } else {
+        post.reactions.likedBy.splice(userIndex, 1);
+    }
+
+    post.reactions.likeCount = post.reactions.likedBy.length;
+    await post.save();
+
+    res.status(200).json({ likeCount: post.reactions.likeCount });
+};
+
+module.exports = { getPosts, createPost, updatePost, deletePost, likePost };

@@ -8,16 +8,16 @@ router
     .route('/')
     .get(postController.getPosts)
     .post(
-        /* verifyJWT,  */ upload.array('mediaFiles', 4),
+        /* verifyJWT, */ upload.array('mediaFiles', 4),
         postController.createPost
-    );
+    )
+    .delete(/* verifyJWT, */ postController.deletePost);
 
 router
     .route('/status/:postId')
     .patch(
         /* verifyJWT, */ upload.array('mediaFiles', 4),
         postController.updatePost
-    )
-    .delete(/* verifyJWT,  */ postController.deletePost);
+    );
 
 module.exports = router;

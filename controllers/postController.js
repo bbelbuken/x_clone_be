@@ -78,7 +78,7 @@ const getPosts = async (req, res) => {
 
 const createPost = async (req, res) => {
     const { userId, content } = req.body;
-    const mediaFiles = req.files; // Handle single or multiple files
+    const mediaFiles = req.files || []; // Handle single or multiple files
 
     const user = await User.findById(userId).exec();
     if (!user) {
@@ -183,26 +183,12 @@ const updatePost = async (req, res) => {
 };
 
 const deletePost = async (req, res) => {
-    const { postId } = req.params;
-    const { username } = req.body;
-
-    // Find the user by username to verify ownership
-    const user = await User.findOne({ username }).exec();
-    if (!user) {
-        return res.status(404).json({ message: 'User not found' });
-    }
+    const { postId } = req.body;
 
     // Find the post by ID
     const post = await Post.findById(postId).exec();
     if (!post) {
         return res.status(404).json({ message: 'Post not found' });
-    }
-
-    // Ensure the user owns the post and is verified
-    if (user._id.toString() !== post.userId.toString()) {
-        return res
-            .status(403)
-            .json({ message: 'You are not authorized to delete this post' });
     }
 
     if (post.media.image && post.media.image.length > 0) {

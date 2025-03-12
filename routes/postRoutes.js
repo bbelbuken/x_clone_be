@@ -22,5 +22,7 @@ router
 
 router.route('/:postId/like').patch(postController.likePost);
 router.route('/:postId/view').patch(postController.incrementView);
+router.route('/:postId/repost').post(postController.repostPost);
+router.route('/:postId/quote').post(postController.quotePost);
 
 module.exports = router;

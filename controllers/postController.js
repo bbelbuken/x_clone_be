@@ -236,7 +236,6 @@ const likePost = async (req, res) => {
         post.reactions.likedBy.splice(userIndex, 1);
     }
 
-    post.reactions.likeCount = post.reactions.likedBy.length;
     await post.save();
 
     res.status(200).json({ likeCount: post.reactions.likeCount });
@@ -253,13 +252,90 @@ const incrementView = async (req, res) => {
 
     if (!post.reactions.viewedBy.includes(userId)) {
         post.reactions.viewedBy.push(userId);
-        post.reactions.viewCount = post.reactions.viewedBy.length;
         await post.save();
     }
 
     res.status(200).json({
         viewCount: post.reactions.viewCount,
         viewedBy: post.reactions.viewedBy,
+    });
+};
+
+const repostPost = async (req, res) => {
+    const { postId } = req.params;
+    const { userId } = req.body;
+
+    const post = await Post.findById(postId).exec();
+    if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    const userIndex = post.reactions.repostedBy.indexOf(userId);
+    if (userIndex === -1) {
+        post.reactions.repostedBy.push(userId);
+    } else {
+        post.reactions.repostedBy.splice(userIndex, 1);
+    }
+
+    await post.save();
+
+    res.status(200).json({
+        repostedBy: post.reactions.repostedBy,
+        repostCount: post.reactions.repostCount,
+    });
+};
+
+const quotePost = async (req, res) => {
+    const { postId } = req.params;
+    const { userId, quoteContent } = req.body;
+    const mediaFiles = req.files || [];
+
+    const originalPost = await Post.findById(postId);
+    if (!originalPost) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    let mediaUrls = {
+        image: [],
+        video: [],
+    };
+
+    if (mediaFiles.length > 0) {
+        uploadedUrls = await uploadFilesToGoogleDrive(
+            mediaFiles,
+            process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
+        );
+        uploadedUrls.forEach((fileUrl, index) => {
+            const mimeType = mediaFiles[index].mimetype;
+            if (mimeType.startsWith('image/')) {
+                mediaUrls.image.push(fileUrl);
+            } else if (mimeType.startsWith('video/')) {
+                mediaUrls.video.push(fileUrl);
+            }
+        });
+    }
+
+    const userIndex = originalPost.reactions.quotedBy.indexOf(userId);
+    if (userIndex === -1) {
+        originalPost.reactions.quotedBy.push(userId);
+    } else {
+        originalPost.reactions.quotedBy.splice(userIndex, 1);
+    }
+
+    await originalPost.save();
+
+    const quotedPost = new Post({
+        userId,
+        content: quoteContent,
+        media: mediaUrls,
+        originalPost: originalPost,
+    });
+
+    await quotedPost.save();
+
+    res.status(200).json({
+        message: 'Post quoted successfully',
+        quotedPost,
     });
 };
 
@@ -270,4 +346,6 @@ module.exports = {
     deletePost,
     likePost,
     incrementView,
+    repostPost,
+    quotePost,
 };

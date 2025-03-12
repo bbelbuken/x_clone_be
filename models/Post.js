@@ -74,6 +74,9 @@ const postSchema = new mongoose.Schema(
                 default: [],
             },
         },
+        originalPost: {
+            type: mongoose.Schema.Types.Mixed,
+        },
     },
     {
         timestamps: true,

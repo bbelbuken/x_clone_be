@@ -21,5 +21,6 @@ router
     );
 
 router.route('/:postId/like').patch(postController.likePost);
+router.route('/:postId/view').patch(postController.incrementView);
 
 module.exports = router;

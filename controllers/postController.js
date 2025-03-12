@@ -242,4 +242,32 @@ const likePost = async (req, res) => {
     res.status(200).json({ likeCount: post.reactions.likeCount });
 };
 
-module.exports = { getPosts, createPost, updatePost, deletePost, likePost };
+const incrementView = async (req, res) => {
+    const { postId } = req.params;
+    const { userId } = req.body;
+
+    const post = await Post.findById(postId).exec();
+    if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    if (!post.reactions.viewedBy.includes(userId)) {
+        post.reactions.viewedBy.push(userId);
+        post.reactions.viewCount = post.reactions.viewedBy.length;
+        await post.save();
+    }
+
+    res.status(200).json({
+        viewCount: post.reactions.viewCount,
+        viewedBy: post.reactions.viewedBy,
+    });
+};
+
+module.exports = {
+    getPosts,
+    createPost,
+    updatePost,
+    deletePost,
+    likePost,
+    incrementView,
+};

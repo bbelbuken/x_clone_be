@@ -270,6 +270,24 @@ const repostPost = async (req, res) => {
         return res.status(404).json({ message: 'Post not found' });
     }
 
+    let cachedImages = [];
+    if (originalPost.media?.image && originalPost.media.image.length > 0) {
+        cachedImages = await Promise.all(
+            originalPost.media.image.map(async (image, index) => {
+                const imgKey = `img:${originalPost._id}:${index}`;
+                let cachedImg = await redisClient.get(imgKey);
+
+                if (!cachedImg) {
+                    const imageData = await fetchImageFromGoogleDrive(image);
+                    await redisClient.set(imgKey, imageData, { EX: 3600 });
+                    cachedImg = imageData;
+                }
+
+                return `data:image/jpeg;base64,${cachedImg}`;
+            })
+        );
+    }
+
     const userIndex = originalPost.reactions.repostedBy.indexOf(userId);
 
     if (userIndex === -1) {
@@ -283,7 +301,12 @@ const repostPost = async (req, res) => {
                 image: [],
                 video: [],
             },
-            originalPost: originalPost.toObject(),
+            originalPost: {
+                ...originalPost.toObject(),
+                cachedImages,
+            },
+            cachedImages,
+            isReposted: true,
         });
 
         await repostedPost.save();

@@ -74,8 +74,14 @@ const postSchema = new mongoose.Schema(
                 default: [],
             },
         },
+
         originalPost: {
             type: mongoose.Schema.Types.Mixed,
+        },
+
+        isReposted: {
+            type: Boolean,
+            default: false,
         },
     },
     {

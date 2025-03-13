@@ -265,24 +265,48 @@ const repostPost = async (req, res) => {
     const { postId } = req.params;
     const { userId } = req.body;
 
-    const post = await Post.findById(postId).exec();
-    if (!post) {
+    const originalPost = await Post.findById(postId).exec();
+    if (!originalPost) {
         return res.status(404).json({ message: 'Post not found' });
     }
 
-    const userIndex = post.reactions.repostedBy.indexOf(userId);
+    const userIndex = originalPost.reactions.repostedBy.indexOf(userId);
+
     if (userIndex === -1) {
-        post.reactions.repostedBy.push(userId);
+        originalPost.reactions.repostedBy.push(userId);
+
+        await originalPost.save();
+
+        const repostedPost = new Post({
+            userId,
+            media: {
+                image: [],
+                video: [],
+            },
+            originalPost: originalPost.toObject(),
+        });
+
+        await repostedPost.save();
+
+        res.status(200).json({
+            message: 'Post reposted successfully',
+            repostedPost,
+        });
     } else {
-        post.reactions.repostedBy.splice(userIndex, 1);
+        originalPost.reactions.repostedBy.splice(userIndex, 1);
+
+        await originalPost.save();
+
+        await Post.findOneAndDelete({
+            userId,
+            'originalPost._id': originalPost._id,
+        });
+
+        res.status(200).json({
+            message: 'Repost removed successfully',
+            originalPost,
+        });
     }
-
-    await post.save();
-
-    res.status(200).json({
-        repostedBy: post.reactions.repostedBy,
-        repostCount: post.reactions.repostCount,
-    });
 };
 
 const quotePost = async (req, res) => {

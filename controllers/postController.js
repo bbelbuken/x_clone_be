@@ -265,36 +265,90 @@ const repostPost = async (req, res) => {
     const { postId } = req.params;
     const { userId } = req.body;
 
-    const originalPost = await Post.findById(postId).exec();
-    if (!originalPost) {
+    const post = await Post.findById(postId).exec();
+    if (!post) {
         return res.status(404).json({ message: 'Post not found' });
     }
 
-    let cachedImages = [];
-    if (originalPost.media?.image && originalPost.media.image.length > 0) {
-        cachedImages = await Promise.all(
-            originalPost.media.image.map(async (image, index) => {
-                const imgKey = `img:${originalPost._id}:${index}`;
-                let cachedImg = await redisClient.get(imgKey);
+    //  if the post is a repost or the original post
+    const isARepost = post.isARepost;
+    const originalPostId = isARepost ? post.originalPost._id : post._id;
 
-                if (!cachedImg) {
-                    const imageData = await fetchImageFromGoogleDrive(image);
-                    await redisClient.set(imgKey, imageData, { EX: 3600 });
-                    cachedImg = imageData;
-                }
+    // original post changes according to ID
+    const originalPost = isARepost
+        ? await Post.findById(originalPostId).exec()
+        : post;
 
-                return `data:image/jpeg;base64,${cachedImg}`;
-            })
-        );
+    if (!originalPost) {
+        return res.status(404).json({ message: 'Original post not found' });
     }
 
-    const userIndex = originalPost.reactions.repostedBy.indexOf(userId);
+    const hasReposted = originalPost.reactions.repostedBy.includes(userId);
 
-    if (userIndex === -1) {
-        originalPost.reactions.repostedBy.push(userId);
-
+    if (hasReposted) {
+        originalPost.reactions.repostedBy =
+            originalPost.reactions.repostedBy.filter(
+                (id) => id.toString() !== userId
+            );
+        originalPost.isReposted = false;
         await originalPost.save();
 
+        await Post.findOneAndDelete({
+            userId,
+            'originalPost._id': originalPost._id,
+        });
+
+        return res.status(200).json({
+            message: 'Repost removed successfully',
+            originalPost,
+        });
+    } else {
+        // create a repost
+        let cachedImages = [];
+        let cachedAvatarUrl = null;
+
+        if (originalPost.media?.image && originalPost.media.image.length > 0) {
+            cachedImages = await Promise.all(
+                originalPost.media.image.map(async (image, index) => {
+                    const imgKey = `img:${originalPost._id}:${index}`;
+                    let cachedImg = await redisClient.get(imgKey);
+
+                    if (!cachedImg) {
+                        const imageData = await fetchImageFromGoogleDrive(
+                            image
+                        );
+                        await redisClient.set(imgKey, imageData, { EX: 3600 });
+                        cachedImg = imageData;
+                    }
+
+                    return `data:image/jpeg;base64,${cachedImg}`;
+                })
+            );
+        }
+
+        const user = await User.findById(originalPost.userId);
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        if (user.avatar) {
+            const avatarKey = `avatar:${user._id}`;
+            let cachedAvatar = await redisClient.get(avatarKey);
+
+            if (!cachedAvatar) {
+                const imageData = await fetchImageFromGoogleDrive(user.avatar);
+                await redisClient.set(avatarKey, imageData, { EX: 3600 });
+                cachedAvatar = imageData;
+            }
+
+            cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
+        }
+
+        originalPost.reactions.repostedBy.push(userId);
+        originalPost.isReposted = true;
+        await originalPost.save();
+
+        // fresh copy
         const repostedPost = new Post({
             userId,
             media: {
@@ -304,30 +358,19 @@ const repostPost = async (req, res) => {
             originalPost: {
                 ...originalPost.toObject(),
                 cachedImages,
+                cachedAvatarUrl,
+                user,
             },
             cachedImages,
-            isReposted: true,
+            cachedAvatarUrl,
+            isARepost: true,
         });
 
         await repostedPost.save();
 
-        res.status(200).json({
+        return res.status(200).json({
             message: 'Post reposted successfully',
             repostedPost,
-        });
-    } else {
-        originalPost.reactions.repostedBy.splice(userIndex, 1);
-
-        await originalPost.save();
-
-        await Post.findOneAndDelete({
-            userId,
-            'originalPost._id': originalPost._id,
-        });
-
-        res.status(200).json({
-            message: 'Repost removed successfully',
-            originalPost,
         });
     }
 };

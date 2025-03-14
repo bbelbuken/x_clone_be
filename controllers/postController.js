@@ -114,6 +114,10 @@ const createPost = async (req, res) => {
     });
 
     if (post) {
+        user.postCount += 1;
+        await user.save();
+        console.log(user);
+
         return res.status(201).json({ message: 'New post created', post });
     } else {
         return res.status(400).json({ message: 'Invalid post data received' });
@@ -189,6 +193,12 @@ const deletePost = async (req, res) => {
     const post = await Post.findById(postId).exec();
     if (!post) {
         return res.status(404).json({ message: 'Post not found' });
+    }
+
+    const user = await User.findById(post.userId).exec();
+    if (user) {
+        user.postCount -= 1;
+        await user.save();
     }
 
     if (post.media.image && post.media.image.length > 0) {

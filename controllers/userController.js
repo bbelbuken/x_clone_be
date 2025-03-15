@@ -297,6 +297,48 @@ const deleteUser = async (req, res) => {
     });
 };
 
+const toggleFollowUser = async (req, res) => {
+    const { userId } = req.params;
+    const { currentUserId } = req.body;
+
+    if (!userId || !currentUserId) {
+        return res.status(400).json({ message: 'User IDs are required' });
+    }
+
+    if (userId === currentUserId) {
+        return res.status(400).json({ message: 'You cannot follow yourself' });
+    }
+
+    const currentUser = await User.findById(currentUserId);
+    const targetUser = await User.findById(userId);
+
+    if (!currentUser || !targetUser) {
+        return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isFollowing = currentUser.following.includes(userId);
+
+    if (isFollowing) {
+        // Unfollow the user
+        currentUser.following.pull(userId);
+        targetUser.followers.pull(currentUserId);
+    } else {
+        // Follow the user
+        currentUser.following.push(userId);
+        targetUser.followers.push(currentUserId);
+    }
+
+    await currentUser.save();
+    await targetUser.save();
+
+    res.status(200).json({
+        message: isFollowing
+            ? 'Unfollowed successfully'
+            : 'Followed successfully',
+        isFollowing: !isFollowing, // Return the new state (true if now following, false if unfollowed)
+    });
+};
+
 //////////////////////////////////////////////////////////////
 
 const uploadAvatarToUser = async (req, res) => {
@@ -391,4 +433,5 @@ module.exports = {
     uploadHeaderToUser,
     deleteAvatarFromUser,
     deleteHeaderFromUser,
+    toggleFollowUser,
 };

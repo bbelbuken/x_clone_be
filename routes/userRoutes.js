@@ -16,6 +16,8 @@ router.route('/:userId').get(userController.getUserById);
 
 router.route('/current/:username').get(userController.getCurrentAccount);
 
+router.route('/:userId/toggle-follow').post(userController.toggleFollowUser);
+
 router
     .route('/:username/upload_avatar')
     .post(upload.single('avatar'), userController.uploadAvatarToUser);

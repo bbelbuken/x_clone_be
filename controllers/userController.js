@@ -9,13 +9,54 @@ const {
 } = require('../utils/googleDriveHelper');
 const redisClient = require('../config/redis');
 const { updateAvatar, clearAvatar } = require('../utils/updateAvatarHelper');
+const { updateHeader, clearHeader } = require('../utils/updateHeaderHelper');
 
 const getUsers = async (req, res) => {
     const users = await User.find().select('-password').lean();
     if (!users?.length) {
         return res.status(404).json({ message: 'No users found' });
     }
-    res.json(users);
+
+    const usersWithCachedFiles = await Promise.all(
+        users.map(async (user) => {
+            if (user.avatar) {
+                const avatarKey = `avatar:${user._id}`;
+                let cachedAvatar = await redisClient.get(avatarKey);
+
+                if (!cachedAvatar) {
+                    const imageData = await fetchImageFromGoogleDrive(
+                        user.avatar
+                    );
+
+                    await redisClient.set(avatarKey, imageData, { EX: 3600 });
+
+                    cachedAvatar = imageData;
+                }
+
+                user.cachedAvatar = `data:image/jpeg;base64,${cachedAvatar}`;
+            }
+
+            if (user.header_photo) {
+                const headerKey = `header:${user._id}`;
+                let cachedHeader = await redisClient.get(headerKey);
+
+                if (!cachedHeader) {
+                    const imageData = await fetchImageFromGoogleDrive(
+                        user.header_photo
+                    );
+
+                    await redisClient.set(headerKey, imageData, { EX: 3600 });
+
+                    cachedHeader = imageData;
+                }
+
+                user.cachedHeader = `data:image/jpeg;base64,${cachedHeader}`;
+            }
+            return user;
+        })
+    );
+
+    res.status(200).json(usersWithCachedFiles);
 };
 
 const getUserById = async (req, res) => {
@@ -50,6 +91,23 @@ const getCurrentAccount = async (req, res) => {
         }
 
         user.cachedAvatar = `data:image/jpeg;base64,${cachedAvatar}`;
+    }
+
+    if (user.header_photo) {
+        const headerKey = `header:${user._id}`;
+        let cachedHeader = await redisClient.get(headerKey);
+
+        if (!cachedHeader) {
+            const imageData = await fetchImageFromGoogleDrive(
+                user.header_photo
+            );
+
+            await redisClient.set(headerKey, imageData, { EX: 3600 });
+
+            cachedHeader = imageData;
+        }
+
+        user.cachedHeader = `data:image/jpeg;base64,${cachedHeader}`;
     }
 
     res.json(user);
@@ -276,14 +334,15 @@ const uploadHeaderToUser = async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ message: 'No header file uploaded' });
     }
-
-    await updateAvatar(user, req.file);
-
-    await user.save();
+    if (req.file && req.file !== user.header_photo) {
+        await updateHeader(user, req.file);
+    } else if (req.file === '' && user.avatar !== '') {
+        await clearHeader(user);
+    }
 
     res.status(200).json({
         message: 'Avatar uploaded successfully',
-        avatarUrl: user.avatar,
+        headerURL: user.header_photo,
     });
 };
 
@@ -312,17 +371,11 @@ const deleteHeaderFromUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    // ? Check if the user already has an header
     if (!user.header_photo) {
         return res.status(400).json({ message: 'No header photo to delete' });
     }
 
-    const headerPhotoFileId = user.header_photo.split('id=')[1];
-
-    await deleteFileFromGoogleDrive(headerPhotoFileId);
-
-    user.header_photo = '';
-    await user.save();
+    await clearHeader(user);
 
     res.status(200).json({ message: 'Header photo deleted successfully' });
 };

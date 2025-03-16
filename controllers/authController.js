@@ -116,4 +116,33 @@ const logout = (req, res) => {
     res.json({ message: 'Cookie cleared' });
 };
 
-module.exports = { login, refresh, logout };
+const switchAccount = async (req, res) => {
+    const { username, userId } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const newAccount = await User.findOne({ username });
+    if (!newAccount) {
+        return res.status(404).json({ message: 'Account not found' });
+    }
+
+    const accessToken = jwt.sign(
+        {
+            UserInfo: {
+                username: newAccount.username,
+            },
+        },
+        process.env.ACCESS_TOKEN_SECRET,
+        { expiresIn: '1d' }
+    );
+
+    res.status(200).json({
+        accessToken,
+        message: `Switched to ${username}`,
+    });
+};
+
+module.exports = { login, refresh, logout, switchAccount };

@@ -11,5 +11,6 @@ router
 router.route('/login').post(loginLimiter, authController.login);
 router.route('/refresh').get(authController.refresh);
 router.route('/logout').post(authController.logout);
+router.route('/switch-account').patch(authController.switchAccount);
 
 module.exports = router;

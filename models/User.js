@@ -74,6 +74,14 @@ const userSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+
+        cachedAvatar: {
+            type: String,
+        },
+
+        cachedHeader: {
+            type: String,
+        },
     },
     {
         timestamps: true,

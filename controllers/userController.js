@@ -159,6 +159,21 @@ const createUser = async (req, res) => {
         res.status(400).json({ message: 'Invalid user data received' });
     }
 
+    if (newUser.avatar) {
+        const avatarKey = `avatar:${newUser._id}`;
+        let cachedAvatar = await redisClient.get(avatarKey);
+
+        if (!cachedAvatar) {
+            const imageData = await fetchImageFromGoogleDrive(newUser.avatar);
+
+            await redisClient.set(avatarKey, imageData, { EX: 3600 });
+
+            cachedAvatar = imageData;
+        }
+
+        newUser.cachedAvatar = `data:image/jpeg;base64,${cachedAvatar}`;
+    }
+
     const accessToken = jwt.sign(
         {
             UserInfo: { username: newUser.username },

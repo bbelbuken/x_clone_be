@@ -139,9 +139,23 @@ const switchAccount = async (req, res) => {
         { expiresIn: '1d' }
     );
 
+    const refreshToken = jwt.sign(
+        { username: newAccount.username },
+        process.env.REFRESH_TOKEN_SECRET,
+        { expiresIn: '7d' }
+    );
+
+    res.cookie('jwt', refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'None',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     res.status(200).json({
         accessToken,
         message: `Switched to ${username}`,
+        newAccount,
     });
 };
 

@@ -6,6 +6,8 @@ const {
     fetchImageFromGoogleDrive,
 } = require('../utils/googleDriveHelper');
 const redisClient = require('../config/redis');
+const mongoose = require('mongoose'); // Import mongoose for ObjectId
+const { ObjectId } = mongoose.Types; // Destructure ObjectId from mongoose.Types
 
 const getPosts = async (req, res) => {
     const posts = await Post.find().lean();
@@ -67,6 +69,15 @@ const getPosts = async (req, res) => {
                 post.cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
             }
 
+            if (post.repliedPost) {
+                const repliedPostUser = await User.findById(
+                    post.repliedPost.userId
+                );
+                if (repliedPostUser) {
+                    post.repliedPostUsername = repliedPostUser.username;
+                }
+            }
+
             // Return the post with cached images and avatar (if available)
             return post;
         })
@@ -123,6 +134,95 @@ const getPostById = async (req, res) => {
     }
 
     res.status(200).json(post);
+};
+
+const getRepliesForPost = async (req, res) => {
+    const { postId } = req.params;
+
+    // Convert postId to ObjectId
+    const objectIdPostId = new ObjectId(postId);
+
+    // Find replies where repliedPost._id matches the ObjectId
+    const replies = await Post.find({
+        'repliedPost._id': objectIdPostId,
+    }).lean();
+
+    if (!replies?.length) {
+        return res
+            .status(404)
+            .json({ message: 'No replies found for this post' });
+    }
+
+    const repliesWithCachedFiles = await Promise.all(
+        replies.map(async (post) => {
+            if (post.media?.image && post.media.image.length > 0) {
+                const cachedImages = await Promise.all(
+                    post.media.image.map(async (image, index) => {
+                        const imgKey = `img:${post._id}:${index}`;
+                        let cachedImg = await redisClient.get(imgKey);
+
+                        if (!cachedImg) {
+                            const imageData = await fetchImageFromGoogleDrive(
+                                image
+                            );
+
+                            await redisClient.set(imgKey, imageData, {
+                                EX: 3600,
+                            });
+
+                            cachedImg = imageData;
+                        }
+
+                        return `data:image/jpeg;base64,${cachedImg}`; // Return base64-encoded image
+                    })
+                );
+
+                post.cachedImages = cachedImages;
+            }
+
+            // Process user avatar
+            const user = await User.findById(post.userId);
+
+            if (!user) {
+                throw new Error('User not found'); // This will be caught by your error handler
+            }
+
+            if (user.avatar) {
+                const avatarKey = `avatar:${user._id}`; // Use user._id as key for avatar in Redis
+                let cachedAvatar = await redisClient.get(avatarKey);
+
+                if (!cachedAvatar) {
+                    // Fetching img data from Google Drive
+                    const imageData = await fetchImageFromGoogleDrive(
+                        user.avatar
+                    );
+
+                    // Cache the avatar URL for future requests
+                    await redisClient.set(avatarKey, imageData, { EX: 3600 });
+
+                    cachedAvatar = imageData;
+                }
+
+                // Add the cached avatar URL to the post object
+                post.cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
+            }
+
+            if (post.repliedPost) {
+                const repliedPostUser = await User.findById(
+                    post.repliedPost.userId
+                );
+                if (repliedPostUser) {
+                    post.repliedPostUsername = repliedPostUser.username;
+                }
+            }
+
+            // Return the post with cached images and avatar (if available)
+            return post;
+        })
+    );
+
+    // Send the final response once all posts are processed
+    res.status(200).json(repliesWithCachedFiles);
 };
 
 const createPost = async (req, res) => {
@@ -250,6 +350,22 @@ const deletePost = async (req, res) => {
         await user.save();
     }
 
+    if (post.repliedPost) {
+        const originalPost = await Post.findById(post.repliedPost._id).exec();
+        if (originalPost) {
+            // Decrement the reply count
+            originalPost.reactions.replyCount -= 1;
+
+            // Remove the deleted post's user ID from the repliedBy array
+            originalPost.reactions.repliedBy =
+                originalPost.reactions.repliedBy.filter(
+                    (id) => id.toString() !== post.userId.toString()
+                );
+
+            await originalPost.save();
+        }
+    }
+
     if (post.media.image && post.media.image.length > 0) {
         for (const mediaUrl of post.media.image) {
             const fileId = mediaUrl.split('id=')[1];
@@ -302,7 +418,8 @@ const likePost = async (req, res) => {
 
 const replyToPost = async (req, res) => {
     const { postId } = req.params;
-    const { userId, content, mediaFiles } = req.body;
+    const { userId, content } = req.body;
+    const mediaFiles = req.files || [];
 
     if (!userId || !content) {
         return res
@@ -310,8 +427,8 @@ const replyToPost = async (req, res) => {
             .json({ message: 'User ID and content are required' });
     }
 
-    const originalPost = await Post.findById(postId).exec();
-    if (!originalPost) {
+    const repliedPost = await Post.findById(postId).exec();
+    if (!repliedPost) {
         return res.status(404).json({ message: 'Post not found' });
     }
 
@@ -340,16 +457,18 @@ const replyToPost = async (req, res) => {
         userId,
         content,
         media: mediaUrls,
-        originalPost: {
-            _id: originalPost._id,
-            userId: originalPost.userId,
-            content: originalPost.content,
-            media: originalPost.media,
+        repliedPost: {
+            ...repliedPost.toObject(),
+            _id: repliedPost._id,
+            userId: repliedPost.userId,
+            content: repliedPost.content,
+            media: repliedPost.media,
         },
     });
 
-    originalPost.reactions.repliedBy.push(userId);
-    await originalPost.save();
+    // Push the userId into the repliedBy array and save the document
+    repliedPost.reactions.repliedBy.push(userId);
+    await repliedPost.save(); // Save the updated document
 
     res.status(201).json({ message: 'Reply created successfully', replyPost });
 };
@@ -358,13 +477,19 @@ const incrementView = async (req, res) => {
     const { postId } = req.params;
     const { userId } = req.body;
 
+    if (!userId) {
+        return res.status(400).json({ message: 'User ID is required' });
+    }
+
     const post = await Post.findById(postId).exec();
     if (!post) {
         return res.status(404).json({ message: 'Post not found' });
     }
 
+    // Check if the user has already viewed the post
     if (!post.reactions.viewedBy.includes(userId)) {
         post.reactions.viewedBy.push(userId);
+        post.reactions.viewCount = post.reactions.viewedBy.length; // Update viewCount based on viewedBy length
         await post.save();
     }
 
@@ -545,6 +670,7 @@ const quotePost = async (req, res) => {
 module.exports = {
     getPosts,
     getPostById,
+    getRepliesForPost,
     createPost,
     updatePost,
     deletePost,

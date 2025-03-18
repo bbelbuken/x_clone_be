@@ -79,6 +79,10 @@ const postSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.Mixed,
         },
 
+        repliedPost: {
+            type: mongoose.Schema.Types.Mixed,
+        },
+
         isARepost: {
             type: Boolean,
             default: false,

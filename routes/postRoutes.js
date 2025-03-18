@@ -15,6 +15,7 @@ router
     .patch(upload.array('mediaFiles', 4), postController.updatePost);
 
 router.route('/:postId/like').patch(postController.likePost);
+router.route('/:postId/reply').post(postController.replyToPost);
 router.route('/:postId/view').patch(postController.incrementView);
 router.route('/:postId/repost').post(postController.repostPost);
 router.route('/:postId/quote').post(postController.quotePost);

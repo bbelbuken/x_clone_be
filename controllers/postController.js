@@ -301,6 +301,60 @@ const likePost = async (req, res) => {
     res.status(200).json({ likeCount: post.reactions.likeCount });
 };
 
+const replyToPost = async (req, res) => {
+    const { postId } = req.params;
+    const { userId, content, mediaFiles } = req.body;
+
+    if (!userId || !content) {
+        return res
+            .status(400)
+            .json({ message: 'User ID and content are required' });
+    }
+
+    const originalPost = await Post.findById(postId).exec();
+    if (!originalPost) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    let mediaUrls = {
+        image: [],
+        video: [],
+    };
+
+    if (mediaFiles && mediaFiles.length > 0) {
+        const uploadedUrls = await uploadFilesToGoogleDrive(
+            mediaFiles,
+            process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
+        );
+
+        uploadedUrls.forEach((fileUrl, index) => {
+            const mimeType = mediaFiles[index].mimetype;
+            if (mimeType.startsWith('image/')) {
+                mediaUrls.image.push(fileUrl);
+            } else if (mimeType.startsWith('video/')) {
+                mediaUrls.video.push(fileUrl);
+            }
+        });
+    }
+
+    const replyPost = await Post.create({
+        userId,
+        content,
+        media: mediaUrls,
+        originalPost: {
+            _id: originalPost._id,
+            userId: originalPost.userId,
+            content: originalPost.content,
+            media: originalPost.media,
+        },
+    });
+
+    originalPost.reactions.repliedBy.push(userId);
+    await originalPost.save();
+
+    res.status(201).json({ message: 'Reply created successfully', replyPost });
+};
+
 const incrementView = async (req, res) => {
     const { postId } = req.params;
     const { userId } = req.body;
@@ -496,6 +550,7 @@ module.exports = {
     updatePost,
     deletePost,
     likePost,
+    replyToPost,
     incrementView,
     repostPost,
     quotePost,

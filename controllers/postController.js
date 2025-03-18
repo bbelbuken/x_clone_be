@@ -76,6 +76,56 @@ const getPosts = async (req, res) => {
     res.status(200).json(postsWithCachedFiles);
 };
 
+const getPostById = async (req, res) => {
+    const { postId } = req.params;
+
+    const post = await Post.findById(postId).lean().exec();
+    if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    // Process media images
+    if (post.media?.image && post.media.image.length > 0) {
+        const cachedImages = await Promise.all(
+            post.media.image.map(async (image, index) => {
+                const imgKey = `img:${post._id}:${index}`;
+                let cachedImg = await redisClient.get(imgKey);
+                s;
+                if (!cachedImg) {
+                    const imageData = await fetchImageFromGoogleDrive(image);
+                    await redisClient.set(imgKey, imageData, { EX: 3600 });
+                    cachedImg = imageData;
+                }
+
+                return `data:image/jpeg;base64,${cachedImg}`;
+            })
+        );
+
+        post.cachedImages = cachedImages;
+    }
+
+    // Process user avatar
+    const user = await User.findById(post.userId);
+    if (!user) {
+        throw new Error('User not found');
+    }
+
+    if (user.avatar) {
+        const avatarKey = `avatar:${user._id}`;
+        let cachedAvatar = await redisClient.get(avatarKey);
+
+        if (!cachedAvatar) {
+            const imageData = await fetchImageFromGoogleDrive(user.avatar);
+            await redisClient.set(avatarKey, imageData, { EX: 3600 });
+            cachedAvatar = imageData;
+        }
+
+        post.cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
+    }
+
+    res.status(200).json(post);
+};
+
 const createPost = async (req, res) => {
     const { userId, content } = req.body;
     const mediaFiles = req.files || []; // Handle single or multiple files
@@ -441,6 +491,7 @@ const quotePost = async (req, res) => {
 
 module.exports = {
     getPosts,
+    getPostById,
     createPost,
     updatePost,
     deletePost,

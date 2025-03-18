@@ -90,7 +90,6 @@ const getPostById = async (req, res) => {
             post.media.image.map(async (image, index) => {
                 const imgKey = `img:${post._id}:${index}`;
                 let cachedImg = await redisClient.get(imgKey);
-                s;
                 if (!cachedImg) {
                     const imageData = await fetchImageFromGoogleDrive(image);
                     await redisClient.set(imgKey, imageData, { EX: 3600 });

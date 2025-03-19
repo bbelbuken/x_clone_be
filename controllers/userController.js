@@ -198,6 +198,7 @@ const createUser = async (req, res) => {
     res.status(201).json({
         message: `New user ${username} created`,
         accessToken,
+        newUser,
     });
 };
 

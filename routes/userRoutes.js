@@ -2,9 +2,6 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const { upload } = require('../middlewares/multer');
-const verifyJWT = require('../middlewares/verifyJWT');
-
-// router.use(verifyJWT);
 
 router
     .route('/')

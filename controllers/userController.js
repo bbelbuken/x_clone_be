@@ -203,8 +203,8 @@ const createUser = async (req, res) => {
 };
 
 const updateUser = async (req, res) => {
+    const { userId } = req.params;
     const {
-        id,
         username,
         password,
         email,
@@ -218,24 +218,18 @@ const updateUser = async (req, res) => {
         header_photo,
     } = req.body;
 
-    // auth
-    if (!id) {
-        return res.status(400).json({ message: 'id is required' });
+    if (!userId) {
+        return res.status(400).json({ message: 'userId is required' });
     }
 
-    // find user by ID
-    const user = await User.findById(id).exec();
+    const user = await User.findById(userId).exec();
     if (!user) {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    // ? duplicate
     if (username && username !== user.username) {
         const duplicate = await User.findOne({ username })
-            .collation({
-                locale: 'en',
-                strength: 2,
-            }) // case sensitivity
+            .collation({ locale: 'en', strength: 2 }) // Case sensitivity
             .lean()
             .exec();
         if (duplicate) {
@@ -244,21 +238,23 @@ const updateUser = async (req, res) => {
         user.username = username;
     }
 
-    //  avatar update
-    if (avatar && avatar !== user.avatar) {
-        await updateAvatar(user, avatar);
+    // Handle avatar update or deletion
+    if (req.files?.avatar) {
+        const avatarFile = req.files.avatar[0];
+        const { avatarUrl } = await uploadAvatarToUser(user, avatarFile);
+        user.avatar = avatarUrl;
     } else if (avatar === '' && user.avatar !== '') {
         await clearAvatar(user);
+        user.avatar = '';
     }
 
-    //  header photo update
-    if (header_photo && header_photo !== user.header_photo) {
-        if (user.header_photo) {
-            await deleteFileFromGoogleDrive(user.header_photo);
-        }
-        user.header_photo = header_photo;
+    // Handle header photo update or deletion
+    if (req.files?.header_photo) {
+        const headerFile = req.files.header_photo[0];
+        const { headerUrl } = await uploadHeaderToUser(user, headerFile);
+        user.header_photo = headerUrl;
     } else if (header_photo === '' && user.header_photo !== '') {
-        await deleteFileFromGoogleDrive(user.header_photo);
+        await clearHeader(user);
         user.header_photo = '';
     }
 
@@ -266,14 +262,15 @@ const updateUser = async (req, res) => {
     if (dateOfBirth) user.dateOfBirth = dateOfBirth;
     if (fullname) user.fullname = fullname;
     if (verified !== undefined) user.verified = verified;
-    if (req.body.hasOwnProperty('bio')) user.bio = bio;
-    if (req.body.hasOwnProperty('location')) user.location = location;
-    if (req.body.hasOwnProperty('website')) user.website = website;
+    if (bio !== undefined) user.bio = bio;
+    if (location !== undefined) user.location = location;
+    if (website !== undefined) user.website = website;
     if (password) user.password = await bcrypt.hash(password, 10);
 
     const updatedUser = await user.save();
+    console.log('updatedUser:', updatedUser);
 
-    res.json({ message: `${updatedUser.username} updated` });
+    res.json({ message: `${updatedUser.username} updated`, updatedUser });
 };
 
 const deleteUser = async (req, res) => {
@@ -356,52 +353,32 @@ const toggleFollowUser = async (req, res) => {
 };
 
 //////////////////////////////////////////////////////////////
-
-const uploadAvatarToUser = async (req, res) => {
-    const { username } = req.params;
-
-    const user = await User.findOne({ username }).exec();
-    if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+const uploadAvatarToUser = async (user, file) => {
+    if (!file) {
+        throw new Error('No file uploaded');
     }
 
-    if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
+    if (file && file !== user.avatar) {
+        await updateAvatar(user, file);
+    } else if (file === '' && user.avatar !== '') {
+        await clearAvatar(user);
     }
 
-    if (req.file && req.file !== user.avatar) {
-        await updateAvatar(user, req.file);
-    } else if (req.file === '' && user.avatar !== '') {
-        await clearAvatar(user); // Use clearAvatar here
-    }
-
-    res.status(200).json({
-        message: 'Avatar uploaded successfully',
-        avatarUrl: user.avatar,
-    });
+    return { avatarUrl: user.avatar };
 };
 
-const uploadHeaderToUser = async (req, res) => {
-    const { username } = req.params;
-
-    const user = await User.findOne({ username }).exec();
-    if (!user) {
-        return res.status(404).json({ message: 'User not found' });
+const uploadHeaderToUser = async (user, file) => {
+    if (!file) {
+        throw new Error('No header file uploaded');
     }
 
-    if (!req.file) {
-        return res.status(400).json({ message: 'No header file uploaded' });
-    }
-    if (req.file && req.file !== user.header_photo) {
-        await updateHeader(user, req.file);
-    } else if (req.file === '' && user.avatar !== '') {
+    if (file && file !== user.header_photo) {
+        await updateHeader(user, file);
+    } else if (file === '' && user.header_photo !== '') {
         await clearHeader(user);
     }
 
-    res.status(200).json({
-        message: 'Avatar uploaded successfully',
-        headerURL: user.header_photo,
-    });
+    return { headerUrl: user.header_photo };
 };
 
 const deleteAvatarFromUser = async (req, res) => {

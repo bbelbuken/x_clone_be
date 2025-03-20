@@ -6,10 +6,18 @@ const { upload } = require('../middlewares/multer');
 router
     .route('/')
     .get(userController.getUsers)
-    .patch(userController.updateUser)
     .delete(userController.deleteUser);
 
-router.route('/:userId').get(userController.getUserById);
+router
+    .route('/:userId')
+    .get(userController.getUserById)
+    .patch(
+        upload.fields([
+            { name: 'avatar', maxCount: 1 },
+            { name: 'header_photo', maxCount: 1 },
+        ]),
+        userController.updateUser
+    );
 
 router.route('/current/:username').get(userController.getCurrentAccount);
 

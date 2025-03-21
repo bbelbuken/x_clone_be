@@ -65,6 +65,39 @@ const getUserById = async (req, res) => {
     if (!user) {
         return res.status(404).json({ message: 'No users found' });
     }
+
+    if (user.avatar) {
+        const avatarKey = `avatar:${user._id}`;
+        let cachedAvatar = await redisClient.get(avatarKey);
+
+        if (!cachedAvatar) {
+            const imageData = await fetchImageFromGoogleDrive(user.avatar);
+
+            await redisClient.set(avatarKey, imageData, { EX: 3600 });
+
+            cachedAvatar = imageData;
+        }
+
+        user.cachedAvatar = `data:image/jpeg;base64,${cachedAvatar}`;
+    }
+
+    if (user.header_photo) {
+        const headerKey = `header:${user._id}`;
+        let cachedHeader = await redisClient.get(headerKey);
+
+        if (!cachedHeader) {
+            const imageData = await fetchImageFromGoogleDrive(
+                user.header_photo
+            );
+
+            await redisClient.set(headerKey, imageData, { EX: 3600 });
+
+            cachedHeader = imageData;
+        }
+
+        user.cachedHeader = `data:image/jpeg;base64,${cachedHeader}`;
+    }
+
     res.json(user);
 };
 

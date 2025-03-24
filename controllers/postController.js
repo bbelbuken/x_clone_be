@@ -416,6 +416,28 @@ const likePost = async (req, res) => {
     res.status(200).json({ likeCount: post.reactions.likeCount });
 };
 
+const bookmarkPost = async (req, res) => {
+    const { postId } = req.params;
+    const { userId } = req.body;
+
+    const post = await Post.findById(postId).exec();
+    if (!post) {
+        return res.status(404).json({ message: 'Post not found' });
+    }
+
+    const userIndex = post.reactions.bookmarkedBy.indexOf(userId);
+
+    if (userIndex === -1) {
+        post.reactions.bookmarkedBy.push(userId);
+    } else {
+        post.reactions.bookmarkedBy.splice(userIndex, 1);
+    }
+
+    await post.save();
+
+    res.status(200).json({ bookmarkedBy: post.reactions.bookmarkedBy });
+};
+
 const replyToPost = async (req, res) => {
     const { postId } = req.params;
     const { userId, content } = req.body;
@@ -675,6 +697,7 @@ module.exports = {
     updatePost,
     deletePost,
     likePost,
+    bookmarkPost,
     replyToPost,
     incrementView,
     repostPost,

@@ -22,5 +22,6 @@ router
 router.route('/:postId/view').patch(postController.incrementView);
 router.route('/:postId/repost').post(postController.repostPost);
 router.route('/:postId/quote').post(postController.quotePost);
+router.route('/:postId/bookmark').patch(postController.bookmarkPost);
 
 module.exports = router;

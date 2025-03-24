@@ -63,6 +63,12 @@ const postSchema = new mongoose.Schema(
                 default: [],
             },
 
+            bookmarkedBy: {
+                type: [mongoose.Schema.Types.ObjectId],
+                ref: 'User',
+                default: [],
+            },
+
             viewCount: {
                 type: Number,
                 default: 0,

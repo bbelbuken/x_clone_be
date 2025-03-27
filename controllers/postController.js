@@ -680,7 +680,6 @@ const quotePost = async (req, res) => {
         media: mediaUrls,
         originalPost: originalPost,
     });
-
     await quotedPost.save();
 
     res.status(200).json({

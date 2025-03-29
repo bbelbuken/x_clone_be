@@ -443,10 +443,12 @@ const replyToPost = async (req, res) => {
     const { userId, content } = req.body;
     const mediaFiles = req.files || [];
 
-    if (!userId || !content) {
+    if (!userId || (!content && (!mediaFiles || mediaFiles.length === 0))) {
         return res
             .status(400)
-            .json({ message: 'User ID and content are required' });
+            .json({
+                message: 'User ID and either content or media are required',
+            });
     }
 
     const repliedPost = await Post.findById(postId).exec();

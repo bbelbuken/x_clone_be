@@ -293,9 +293,9 @@ const replyToPost = async (req, res) => {
     };
 
     if (mediaFiles && mediaFiles.length > 0) {
-        const uploadedUrls = await uploadFilesToGoogleDrive(
+        const uploadedUrls = await uploadFilesToS3(
             mediaFiles,
-            process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
+            'post-media' // S3 folder/path
         );
 
         uploadedUrls.forEach((fileUrl, index) => {
@@ -323,7 +323,7 @@ const replyToPost = async (req, res) => {
 
     // Push the userId into the repliedBy array and save the document
     repliedPost.reactions.repliedBy.push(userId);
-    await repliedPost.save(); // Save the updated document
+    await repliedPost.save();
 
     res.status(201).json({ message: 'Reply created successfully', replyPost });
 };
@@ -396,45 +396,9 @@ const repostPost = async (req, res) => {
             originalPost,
         });
     } else {
-        // create a repost
-        let cachedImages = [];
-        let cachedAvatarUrl = null;
-
-        if (originalPost.media?.image && originalPost.media.image.length > 0) {
-            cachedImages = await Promise.all(
-                originalPost.media.image.map(async (image, index) => {
-                    const imgKey = `img:${originalPost._id}:${index}`;
-                    let cachedImg = await redisClient.get(imgKey);
-
-                    if (!cachedImg) {
-                        const imageData = await fetchImageFromGoogleDrive(
-                            image
-                        );
-                        await redisClient.set(imgKey, imageData, { EX: 3600 });
-                        cachedImg = imageData;
-                    }
-
-                    return `data:image/jpeg;base64,${cachedImg}`;
-                })
-            );
-        }
-
         const user = await User.findById(originalPost.userId);
         if (!user) {
             throw new Error('User not found');
-        }
-
-        if (user.avatar) {
-            const avatarKey = `avatar:${user._id}`;
-            let cachedAvatar = await redisClient.get(avatarKey);
-
-            if (!cachedAvatar) {
-                const imageData = await fetchImageFromGoogleDrive(user.avatar);
-                await redisClient.set(avatarKey, imageData, { EX: 3600 });
-                cachedAvatar = imageData;
-            }
-
-            cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
         }
 
         originalPost.reactions.repostedBy.push(userId);
@@ -450,12 +414,8 @@ const repostPost = async (req, res) => {
             },
             originalPost: {
                 ...originalPost.toObject(),
-                cachedImages,
-                cachedAvatarUrl,
                 user,
             },
-            cachedImages,
-            cachedAvatarUrl,
             isARepost: true,
         });
 
@@ -484,10 +444,8 @@ const quotePost = async (req, res) => {
     };
 
     if (mediaFiles.length > 0) {
-        uploadedUrls = await uploadFilesToGoogleDrive(
-            mediaFiles,
-            process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
-        );
+        const uploadedUrls = await uploadFilesToS3(mediaFiles, 'post-media');
+
         uploadedUrls.forEach((fileUrl, index) => {
             const mimeType = mediaFiles[index].mimetype;
             if (mimeType.startsWith('image/')) {

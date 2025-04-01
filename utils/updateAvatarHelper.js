@@ -5,7 +5,7 @@ const updateAvatar = async (user, newAvatarFile) => {
         await deleteFromS3(user.avatar);
     }
 
-    const newAvatarUrl = await uploadFileToS3(newAvatarFile, 'avatars');
+    const newAvatarUrl = await uploadFileToS3(newAvatarFile, 'user-avatars');
 
     user.avatar = newAvatarUrl;
     await user.save();

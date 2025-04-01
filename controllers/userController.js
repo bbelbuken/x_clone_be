@@ -2,100 +2,31 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-/* const {
-    fetchImageFromGoogleDrive,
-    deleteFileFromGoogleDrive,
-    uploadFileToGoogleDrive,
-} = require('../utils/googleDriveHelper'); */
-//const redisClient = require('../config/redis');
 const { updateAvatar, clearAvatar } = require('../utils/updateAvatarHelper');
 const { updateHeader, clearHeader } = require('../utils/updateHeaderHelper');
+const { uploadFileToS3, deleteFileFromS3 } = require('../utils/s3UploadHelper');
 
 const getUsers = async (req, res) => {
-    const users = await User.find().select('-password').lean();
+    const users = await User.find()
+        .select('-password -__v') // Exclude password and version key
+        .lean();
+
     if (!users?.length) {
         return res.status(404).json({ message: 'No users found' });
     }
 
-    const usersWithCachedFiles = await Promise.all(
-        users.map(async (user) => {
-            if (user.avatar) {
-                const avatarKey = `avatar:${user._id}`;
-                let cachedAvatar = await redisClient.get(avatarKey);
-
-                if (!cachedAvatar) {
-                    const imageData = await fetchImageFromGoogleDrive(
-                        user.avatar
-                    );
-
-                    await redisClient.set(avatarKey, imageData, { EX: 3600 });
-
-                    cachedAvatar = imageData;
-                }
-
-                user.cachedAvatar = `data:image/jpeg;base64,${cachedAvatar}`;
-            }
-
-            if (user.header_photo) {
-                const headerKey = `header:${user._id}`;
-                let cachedHeader = await redisClient.get(headerKey);
-
-                if (!cachedHeader) {
-                    const imageData = await fetchImageFromGoogleDrive(
-                        user.header_photo
-                    );
-
-                    await redisClient.set(headerKey, imageData, { EX: 3600 });
-
-                    cachedHeader = imageData;
-                }
-
-                user.cachedHeader = `data:image/jpeg;base64,${cachedHeader}`;
-            }
-            return user;
-        })
-    );
-
-    res.status(200).json(usersWithCachedFiles);
+    res.status(200).json(users);
 };
 
 const getUserById = async (req, res) => {
     const { userId } = req.params;
-    const user = await User.findById(userId);
+
+    const user = await User.findById(userId)
+        .select('username avatar header_photo verified email fullname')
+        .lean();
+
     if (!user) {
-        return res.status(404).json({ message: 'No users found' });
-    }
-
-    if (user.avatar) {
-        const avatarKey = `avatar:${user._id}`;
-        let cachedAvatar = await redisClient.get(avatarKey);
-
-        if (!cachedAvatar) {
-            const imageData = await fetchImageFromGoogleDrive(user.avatar);
-
-            await redisClient.set(avatarKey, imageData, { EX: 3600 });
-
-            cachedAvatar = imageData;
-        }
-
-        user.cachedAvatar = `data:image/jpeg;base64,${cachedAvatar}`;
-    }
-
-    if (user.header_photo) {
-        const headerKey = `header:${user._id}`;
-        let cachedHeader = await redisClient.get(headerKey);
-
-        if (!cachedHeader) {
-            const imageData = await fetchImageFromGoogleDrive(
-                user.header_photo
-            );
-
-            await redisClient.set(headerKey, imageData, { EX: 3600 });
-
-            cachedHeader = imageData;
-        }
-
-        user.cachedHeader = `data:image/jpeg;base64,${cachedHeader}`;
+        return res.status(404).json({ message: 'User not found' });
     }
 
     res.json(user);
@@ -111,46 +42,12 @@ const getCurrentAccount = async (req, res) => {
         return res.status(404).json({ message: 'No users found' });
     }
 
-    if (user.avatar) {
-        const avatarKey = `avatar:${user._id}`;
-        let cachedAvatar = await redisClient.get(avatarKey);
-
-        if (!cachedAvatar) {
-            const imageData = await fetchImageFromGoogleDrive(user.avatar);
-
-            await redisClient.set(avatarKey, imageData, { EX: 3600 });
-
-            cachedAvatar = imageData;
-        }
-
-        user.cachedAvatar = `data:image/jpeg;base64,${cachedAvatar}`;
-    }
-
-    if (user.header_photo) {
-        const headerKey = `header:${user._id}`;
-        let cachedHeader = await redisClient.get(headerKey);
-
-        if (!cachedHeader) {
-            const imageData = await fetchImageFromGoogleDrive(
-                user.header_photo
-            );
-
-            await redisClient.set(headerKey, imageData, { EX: 3600 });
-
-            cachedHeader = imageData;
-        }
-
-        user.cachedHeader = `data:image/jpeg;base64,${cachedHeader}`;
-    }
-
     res.json(user);
 };
 
 const createUser = async (req, res) => {
     const { username, fullname, password, email, dateOfBirth } = req.body;
     if (!username || !fullname || !password || !email || !dateOfBirth) {
-        console.log('req.body:', req.body);
-        console.log('req.file:', req.file);
         return res.status(400).json({ message: 'All fields are required' });
     }
 
@@ -169,14 +66,12 @@ const createUser = async (req, res) => {
     }
 
     let avatarUrl = '';
-
     if (req.file) {
-        avatarUrl = await uploadFileToGoogleDrive(
+        avatarUrl = await uploadFileToS3(
             req.file,
-            process.env.GOOGLE_DRIVE_USERAVATAR_FOLDERID
+            'user-avatars' // S3 folder name
         );
     }
-
     // * hash password
     const hashedPwd = await bcrypt.hash(password, 10); // salt rounds
 
@@ -192,27 +87,12 @@ const createUser = async (req, res) => {
         res.status(400).json({ message: 'Invalid user data received' });
     }
 
-    if (newUser.avatar) {
-        const avatarKey = `avatar:${newUser._id}`;
-        let cachedAvatar = await redisClient.get(avatarKey);
-
-        if (!cachedAvatar) {
-            const imageData = await fetchImageFromGoogleDrive(newUser.avatar);
-
-            await redisClient.set(avatarKey, imageData, { EX: 3600 });
-
-            cachedAvatar = imageData;
-        }
-
-        newUser.cachedAvatar = `data:image/jpeg;base64,${cachedAvatar}`;
-    }
-
     const accessToken = jwt.sign(
         {
             UserInfo: { username: newUser.username },
         },
         process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: '15m' }
+        { expiresIn: '1d' }
     );
 
     const refreshToken = jwt.sign(
@@ -273,21 +153,31 @@ const updateUser = async (req, res) => {
 
     // Handle avatar update or deletion
     if (req.files?.avatar) {
+        // Delete old avatar if exists
+        if (user.avatar) {
+            await deleteFileFromS3(user.avatar);
+        }
+        // Upload new avatar
         const avatarFile = req.files.avatar[0];
-        const { avatarUrl } = await uploadAvatarToUser(user, avatarFile);
-        user.avatar = avatarUrl;
+        user.avatar = await uploadFileToS3(avatarFile, 'user-avatars');
     } else if (avatar === '' && user.avatar !== '') {
-        await clearAvatar(user);
+        // Delete avatar if empty string passed
+        await deleteFileFromS3(user.avatar);
         user.avatar = '';
     }
 
     // Handle header photo update or deletion
     if (req.files?.header_photo) {
+        // Delete old header if exists
+        if (user.header_photo) {
+            await deleteFileFromS3(user.header_photo);
+        }
+        // Upload new header
         const headerFile = req.files.header_photo[0];
-        const { headerUrl } = await uploadHeaderToUser(user, headerFile);
-        user.header_photo = headerUrl;
+        user.header_photo = await uploadFileToS3(headerFile, 'user-headers');
     } else if (header_photo === '' && user.header_photo !== '') {
-        await clearHeader(user);
+        // Delete header if empty string passed
+        await deleteFileFromS3(user.header_photo);
         user.header_photo = '';
     }
 
@@ -301,8 +191,6 @@ const updateUser = async (req, res) => {
     if (password) user.password = await bcrypt.hash(password, 10);
 
     const updatedUser = await user.save();
-    console.log('updatedUser:', updatedUser);
-
     res.json({ message: `${updatedUser.username} updated`, updatedUser });
 };
 
@@ -317,19 +205,14 @@ const deleteUser = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    // Clear the avatar using clearAvatar
+    // Delete avatar from S3 if exists
     if (user.avatar) {
-        await clearAvatar(user);
+        await deleteFileFromS3(user.avatar);
     }
 
-    // Clear the header photo
+    // Delete header photo from S3 if exists
     if (user.header_photo) {
-        const headerUrl = user.header_photo.split('id=')[1];
-        if (headerUrl) {
-            await deleteFileFromGoogleDrive(headerUrl);
-        } else {
-            console.error('Invalid header URL format');
-        }
+        await deleteFileFromS3(user.header_photo);
     }
 
     // Delete user's posts

@@ -293,10 +293,7 @@ const replyToPost = async (req, res) => {
     };
 
     if (mediaFiles && mediaFiles.length > 0) {
-        const uploadedUrls = await uploadFilesToS3(
-            mediaFiles,
-            'post-media' // S3 folder/path
-        );
+        const uploadedUrls = await uploadFilesToS3(mediaFiles, 'post-media');
 
         uploadedUrls.forEach((fileUrl, index) => {
             const mimeType = mediaFiles[index].mimetype;

@@ -5,7 +5,7 @@ const updateHeader = async (user, newHeaderFile) => {
         await deleteFromS3(user.header_photo);
     }
 
-    const newHeaderURL = await uploadFileToS3(newHeaderFile, 'headers');
+    const newHeaderURL = await uploadFileToS3(newHeaderFile, 'user-headers');
 
     user.header_photo = newHeaderURL;
     await user.save();

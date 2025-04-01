@@ -1,16 +1,13 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
-/* const {
-    uploadFilesToGoogleDrive,
-    deleteFileFromGoogleDrive,
-    fetchImageFromGoogleDrive,
-} = require('../utils/googleDriveHelper'); */
-const mongoose = require('mongoose'); // Import mongoose for ObjectId
-const { ObjectId } = mongoose.Types; // Destructure ObjectId from mongoose.Types
+const {
+    uploadFilesToS3,
+    deleteFileFromS3,
+} = require('../utils/s3UploadHelper');
 
 const getPosts = async (req, res) => {
     const posts = await Post.find()
-        .populate('userId', 'username avatar verified') // Gets minimal user info
+        .populate('userId') // Gets minimal user info
         .populate({
             path: 'repliedPost.userId',
             select: 'username',
@@ -34,47 +31,19 @@ const getPosts = async (req, res) => {
 const getPostById = async (req, res) => {
     const { postId } = req.params;
 
-    const post = await Post.findById(postId).lean().exec();
+    const post = await Post.findById(postId)
+        .populate('userId')
+        .populate('repliedPost.userId', 'username')
+        .lean()
+        .exec();
+
     if (!post) {
         return res.status(404).json({ message: 'Post not found' });
     }
 
-    // Process media images
-    if (post.media?.image && post.media.image.length > 0) {
-        const cachedImages = await Promise.all(
-            post.media.image.map(async (image, index) => {
-                const imgKey = `img:${post._id}:${index}`;
-                let cachedImg = await redisClient.get(imgKey);
-                if (!cachedImg) {
-                    const imageData = await fetchImageFromGoogleDrive(image);
-                    await redisClient.set(imgKey, imageData, { EX: 3600 });
-                    cachedImg = imageData;
-                }
-
-                return `data:image/jpeg;base64,${cachedImg}`;
-            })
-        );
-
-        post.cachedImages = cachedImages;
-    }
-
-    // Process user avatar
-    const user = await User.findById(post.userId);
-    if (!user) {
-        throw new Error('User not found');
-    }
-
-    if (user.avatar) {
-        const avatarKey = `avatar:${user._id}`;
-        let cachedAvatar = await redisClient.get(avatarKey);
-
-        if (!cachedAvatar) {
-            const imageData = await fetchImageFromGoogleDrive(user.avatar);
-            await redisClient.set(avatarKey, imageData, { EX: 3600 });
-            cachedAvatar = imageData;
-        }
-
-        post.cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
+    // Add repliedPostUsername if this is a reply
+    if (post.repliedPost?.userId) {
+        post.repliedPostUsername = post.repliedPost.userId.username;
     }
 
     res.status(200).json(post);
@@ -83,13 +52,11 @@ const getPostById = async (req, res) => {
 const getRepliesForPost = async (req, res) => {
     const { postId } = req.params;
 
-    // Convert postId to ObjectId
-    const objectIdPostId = new ObjectId(postId);
-
-    // Find replies where repliedPost._id matches the ObjectId
     const replies = await Post.find({
-        'repliedPost._id': objectIdPostId,
-    }).lean();
+        'repliedPost._id': postId, // Mongoose automatically converts string to ObjectId
+    })
+        .populate('repliedPost.userId', 'username') // Get replied post author info
+        .lean();
 
     if (!replies?.length) {
         return res
@@ -97,81 +64,18 @@ const getRepliesForPost = async (req, res) => {
             .json({ message: 'No replies found for this post' });
     }
 
-    const repliesWithCachedFiles = await Promise.all(
-        replies.map(async (post) => {
-            if (post.media?.image && post.media.image.length > 0) {
-                const cachedImages = await Promise.all(
-                    post.media.image.map(async (image, index) => {
-                        const imgKey = `img:${post._id}:${index}`;
-                        let cachedImg = await redisClient.get(imgKey);
+    // Add repliedPostUsername field if reply exists
+    const formattedReplies = replies.map((post) => ({
+        ...post,
+        repliedPostUsername: post.repliedPost?.userId?.username,
+    }));
 
-                        if (!cachedImg) {
-                            const imageData = await fetchImageFromGoogleDrive(
-                                image
-                            );
-
-                            await redisClient.set(imgKey, imageData, {
-                                EX: 3600,
-                            });
-
-                            cachedImg = imageData;
-                        }
-
-                        return `data:image/jpeg;base64,${cachedImg}`; // Return base64-encoded image
-                    })
-                );
-
-                post.cachedImages = cachedImages;
-            }
-
-            // Process user avatar
-            const user = await User.findById(post.userId);
-
-            if (!user) {
-                throw new Error('User not found'); // This will be caught by your error handler
-            }
-
-            if (user.avatar) {
-                const avatarKey = `avatar:${user._id}`; // Use user._id as key for avatar in Redis
-                let cachedAvatar = await redisClient.get(avatarKey);
-
-                if (!cachedAvatar) {
-                    // Fetching img data from Google Drive
-                    const imageData = await fetchImageFromGoogleDrive(
-                        user.avatar
-                    );
-
-                    // Cache the avatar URL for future requests
-                    await redisClient.set(avatarKey, imageData, { EX: 3600 });
-
-                    cachedAvatar = imageData;
-                }
-
-                // Add the cached avatar URL to the post object
-                post.cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
-            }
-
-            if (post.repliedPost) {
-                const repliedPostUser = await User.findById(
-                    post.repliedPost.userId
-                );
-                if (repliedPostUser) {
-                    post.repliedPostUsername = repliedPostUser.username;
-                }
-            }
-
-            // Return the post with cached images and avatar (if available)
-            return post;
-        })
-    );
-
-    // Send the final response once all posts are processed
-    res.status(200).json(repliesWithCachedFiles);
+    res.status(200).json(formattedReplies);
 };
 
 const createPost = async (req, res) => {
     const { userId, content } = req.body;
-    const mediaFiles = req.files || []; // Handle single or multiple files
+    const mediaFiles = req.files || [];
 
     const user = await User.findById(userId).exec();
     if (!user) {
@@ -184,14 +88,11 @@ const createPost = async (req, res) => {
     };
 
     if (mediaFiles.length > 0) {
-        // Handle multiple or single file upload
-        uploadedUrls = await uploadFilesToGoogleDrive(
-            mediaFiles,
-            process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
-        );
-        uploadedUrls.forEach((fileUrl, index) => {
-            const mimeType = mediaFiles[index].mimetype; // Get MIME type of the file
+        // Upload files to S3 and categorize them
+        const uploadedUrls = await uploadFilesToS3(mediaFiles, 'post-media');
 
+        uploadedUrls.forEach((fileUrl, index) => {
+            const mimeType = mediaFiles[index].mimetype;
             if (mimeType.startsWith('image/')) {
                 mediaUrls.image.push(fileUrl);
             } else if (mimeType.startsWith('video/')) {
@@ -209,7 +110,6 @@ const createPost = async (req, res) => {
     if (post) {
         user.postCount += 1;
         await user.save();
-        console.log(user);
 
         return res.status(201).json({ message: 'New post created', post });
     } else {
@@ -219,7 +119,7 @@ const createPost = async (req, res) => {
 
 const updatePost = async (req, res) => {
     const { postId, username } = req.params;
-    const { content, mediaFiles, deleteMediaIds } = req.body;
+    const { content, mediaFiles, deleteMediaUrls } = req.body;
 
     if (!postId || !username) {
         return res.status(400).json({ message: 'All fields are required' });
@@ -244,14 +144,15 @@ const updatePost = async (req, res) => {
     }
 
     // 1. Handle deletion of media
-    if (deleteMediaIds && deleteMediaIds.length > 0) {
-        for (const mediaUrl of deleteMediaIds) {
-            const fileId = mediaUrl.split('id=')[1]; // Extract the fileId from the URL
-            await deleteFileFromGoogleDrive(fileId); // Delete the file from Google Drive
-        }
-        // Remove the deleted media from post.media array
-        post.media = post.media.filter(
-            (mediaUrl) => !deleteMediaIds.includes(mediaUrl)
+    if (deleteMediaUrls?.length > 0) {
+        await Promise.all(deleteMediaUrls.map((url) => deleteFileFromS3(url)));
+
+        // Filter out deleted media
+        post.media.image = post.media.image.filter(
+            (url) => !deleteMediaUrls.includes(url)
+        );
+        post.media.video = post.media.video.filter(
+            (url) => !deleteMediaUrls.includes(url)
         );
     }
 
@@ -264,10 +165,7 @@ const updatePost = async (req, res) => {
             });
         }
 
-        const newMediaUrls = await uploadFilesToGoogleDrive(
-            mediaFiles,
-            process.env.GOOGLE_DRIVE_POSTMEDIA_FOLDERID
-        );
+        const newMediaUrls = await uploadFilesToS3(mediaFiles, 'post-media');
         post.media.push(...newMediaUrls); // Add new media URLs to the existing media array
     }
 
@@ -282,7 +180,6 @@ const updatePost = async (req, res) => {
 const deletePost = async (req, res) => {
     const { postId } = req.params;
 
-    // Find the post by ID
     const post = await Post.findById(postId).exec();
     if (!post) {
         return res.status(404).json({ message: 'Post not found' });
@@ -297,42 +194,34 @@ const deletePost = async (req, res) => {
     if (post.repliedPost) {
         const originalPost = await Post.findById(post.repliedPost._id).exec();
         if (originalPost) {
-            // Decrement the reply count
             originalPost.reactions.replyCount -= 1;
-
-            // Remove the deleted post's user ID from the repliedBy array
             originalPost.reactions.repliedBy =
                 originalPost.reactions.repliedBy.filter(
                     (id) => id.toString() !== post.userId.toString()
                 );
-
             await originalPost.save();
         }
     }
 
-    if (post.media.image && post.media.image.length > 0) {
-        for (const mediaUrl of post.media.image) {
-            const fileId = mediaUrl.split('id=')[1];
-            await deleteFileFromGoogleDrive(fileId);
-        }
+    // Delete media files from S3
+    const deleteMediaPromises = [];
+
+    // Delete all image files
+    if (post.media?.image?.length > 0) {
+        post.media.image.forEach((mediaUrl) => {
+            deleteMediaPromises.push(deleteFileFromS3(mediaUrl));
+        });
     }
 
-    if (post.media.video && post.media.video.length > 0) {
-        for (const mediaUrl of post.media.video) {
-            const fileId = mediaUrl.split('id=')[1];
-            await deleteFileFromGoogleDrive(fileId);
-        }
+    // Delete all video files
+    if (post.media?.video?.length > 0) {
+        post.media.video.forEach((mediaUrl) => {
+            deleteMediaPromises.push(deleteFileFromS3(mediaUrl));
+        });
     }
 
-    // invalidate redis cache for the post image
-    if (post.media.image && post.media.image.length > 0) {
-        await Promise.all(
-            post.media.image.map(async (_, index) => {
-                const imgKey = `img:${post._id}:${index}`;
-                await redisClient.del(imgKey);
-            })
-        );
-    }
+    // Wait for all media deletions to complete
+    await Promise.all(deleteMediaPromises);
 
     await post.deleteOne();
     return res.status(200).json({ message: 'Post deleted successfully' });

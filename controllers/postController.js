@@ -3,7 +3,9 @@ const Post = require('../models/Post');
 const {
     uploadFilesToS3,
     deleteFileFromS3,
+    getPresignedUrl,
 } = require('../utils/s3UploadHelper');
+const mongoose = require('mongoose');
 
 const getPosts = async (req, res) => {
     const posts = await Post.find()
@@ -18,13 +20,28 @@ const getPosts = async (req, res) => {
         return res.status(404).json({ message: 'No posts found' });
     }
 
-    // Add repliedPostUsername to each post if it exists
-    const postsWithReplyUsernames = posts.map((post) => ({
-        ...post,
-        repliedPostUsername: post.repliedPost?.userId?.username || null,
-    }));
+    // Process posts to add presigned URLs and reply usernames
+    const processedPosts = await Promise.all(
+        posts.map(async (post) => {
+            // Generate presigned URLs for media
+            const mediaWithUrls = {
+                image: await Promise.all(
+                    (post.media?.image || []).map((key) => getPresignedUrl(key))
+                ),
+                video: await Promise.all(
+                    (post.media?.video || []).map((key) => getPresignedUrl(key))
+                ),
+            };
 
-    res.status(200).json(postsWithReplyUsernames);
+            return {
+                ...post,
+                media: mediaWithUrls,
+                repliedPostUsername: post.repliedPost?.userId?.username || null,
+            };
+        })
+    );
+
+    res.status(200).json(processedPosts);
 };
 
 const getPostById = async (req, res) => {
@@ -39,7 +56,19 @@ const getPostById = async (req, res) => {
         return res.status(404).json({ message: 'Post not found' });
     }
 
-    // Add repliedPostUsername if this is a reply
+    // Generate presigned URLs for media
+    if (post.media?.image?.length) {
+        post.media.image = await Promise.all(
+            post.media.image.map((key) => getPresignedUrl(key))
+        );
+    }
+
+    if (post.media?.video?.length) {
+        post.media.video = await Promise.all(
+            post.media.video.map((key) => getPresignedUrl(key))
+        );
+    }
+
     if (post.repliedPost?.userId) {
         post.repliedPostUsername = post.repliedPost.userId.username;
     }
@@ -50,10 +79,13 @@ const getPostById = async (req, res) => {
 const getRepliesForPost = async (req, res) => {
     const { postId } = req.params;
 
+    // Convert postId to ObjectId for proper comparison
+    const objectIdPostId = new mongoose.Types.ObjectId(postId);
+
     const replies = await Post.find({
-        'repliedPost._id': postId, // Mongoose automatically converts string to ObjectId
+        'repliedPost._id': objectIdPostId,
     })
-        .populate('repliedPost.userId', 'username') // Get replied post author info
+        .populate('repliedPost.userId', 'username')
         .lean();
 
     if (!replies?.length) {
@@ -62,13 +94,33 @@ const getRepliesForPost = async (req, res) => {
             .json({ message: 'No replies found for this post' });
     }
 
-    // Add repliedPostUsername field if reply exists
-    const formattedReplies = replies.map((post) => ({
-        ...post,
-        repliedPostUsername: post.repliedPost?.userId?.username,
-    }));
+    const repliesWithUrls = await Promise.all(
+        replies.map(async (post) => {
+            const formattedPost = { ...post };
 
-    res.status(200).json(formattedReplies);
+            // Process images
+            if (post.media?.image?.length) {
+                formattedPost.media.image = await Promise.all(
+                    post.media.image.map((key) => getPresignedUrl(key))
+                );
+            }
+
+            // Process videos
+            if (post.media?.video?.length) {
+                formattedPost.media.video = await Promise.all(
+                    post.media.video.map((key) => getPresignedUrl(key))
+                );
+            }
+
+            // Maintain repliedPostUsername
+            formattedPost.repliedPostUsername =
+                post.repliedPost?.userId?.username;
+
+            return formattedPost;
+        })
+    );
+
+    res.status(200).json(repliesWithUrls);
 };
 
 const createPost = async (req, res) => {
@@ -80,21 +132,22 @@ const createPost = async (req, res) => {
         return res.status(404).json({ message: 'User not found' });
     }
 
-    let mediaUrls = {
+    let mediaKeys = {
         image: [],
         video: [],
     };
 
     if (mediaFiles.length > 0) {
-        // Upload files to S3 and categorize them
-        const uploadedUrls = await uploadFilesToS3(mediaFiles, 'post-media');
+        // Upload files to S3 and get their keys
+        const uploadedKeys = await uploadFilesToS3(mediaFiles, 'post-media');
 
-        uploadedUrls.forEach((fileUrl, index) => {
+        // Categorize them by type
+        uploadedKeys.forEach((key, index) => {
             const mimeType = mediaFiles[index].mimetype;
             if (mimeType.startsWith('image/')) {
-                mediaUrls.image.push(fileUrl);
+                mediaKeys.image.push(key);
             } else if (mimeType.startsWith('video/')) {
-                mediaUrls.video.push(fileUrl);
+                mediaKeys.video.push(key);
             }
         });
     }
@@ -102,14 +155,26 @@ const createPost = async (req, res) => {
     const post = await Post.create({
         content,
         userId,
-        media: mediaUrls, // Store URLs of uploaded files
+        media: mediaKeys, // Store only the S3 keys
     });
 
     if (post) {
         user.postCount += 1;
         await user.save();
 
-        return res.status(201).json({ message: 'New post created', post });
+        // Generate presigned URLs for the response
+        const responsePost = post.toObject();
+        responsePost.media.image = await Promise.all(
+            post.media.image.map((key) => getPresignedUrl(key))
+        );
+        responsePost.media.video = await Promise.all(
+            post.media.video.map((key) => getPresignedUrl(key))
+        );
+
+        return res.status(201).json({
+            message: 'New post created',
+            post: responsePost,
+        });
     } else {
         return res.status(400).json({ message: 'Invalid post data received' });
     }
@@ -117,7 +182,8 @@ const createPost = async (req, res) => {
 
 const updatePost = async (req, res) => {
     const { postId, username } = req.params;
-    const { content, mediaFiles, deleteMediaUrls } = req.body;
+    const { content, deleteMediaKeys } = req.body; // Changed from deleteMediaUrls to deleteMediaKeys
+    const mediaFiles = req.files || []; // Get files from multer
 
     if (!postId || !username) {
         return res.status(400).json({ message: 'All fields are required' });
@@ -142,37 +208,57 @@ const updatePost = async (req, res) => {
     }
 
     // 1. Handle deletion of media
-    if (deleteMediaUrls?.length > 0) {
-        await Promise.all(deleteMediaUrls.map((url) => deleteFileFromS3(url)));
+    if (deleteMediaKeys?.length > 0) {
+        await Promise.all(deleteMediaKeys.map((key) => deleteFromS3(key)));
 
         // Filter out deleted media
         post.media.image = post.media.image.filter(
-            (url) => !deleteMediaUrls.includes(url)
+            (key) => !deleteMediaKeys.includes(key)
         );
         post.media.video = post.media.video.filter(
-            (url) => !deleteMediaUrls.includes(url)
+            (key) => !deleteMediaKeys.includes(key)
         );
     }
 
     // 2. Handle adding new media
-    if (mediaFiles && mediaFiles.length > 0) {
-        const totalMedia = post.media.length + mediaFiles.length;
+    if (mediaFiles.length > 0) {
+        const totalMedia =
+            post.media.image.length +
+            post.media.video.length +
+            mediaFiles.length;
         if (totalMedia > 4) {
             return res.status(400).json({
                 message: 'Maximum 4 media files are allowed per post.',
             });
         }
 
-        const newMediaUrls = await uploadFilesToS3(mediaFiles, 'post-media');
-        post.media.push(...newMediaUrls); // Add new media URLs to the existing media array
+        const uploadedKeys = await Promise.all(
+            mediaFiles.map((file) => uploadToS3(file, 'post-media'))
+        );
+
+        // Categorize new media
+        mediaFiles.forEach((file, index) => {
+            const type = file.mimetype.startsWith('image/') ? 'image' : 'video';
+            post.media[type].push(uploadedKeys[index]);
+        });
     }
 
     post.content = content || post.content;
     const updatedPost = await post.save();
 
-    return res
-        .status(200)
-        .json({ message: 'Post updated successfully', post: updatedPost });
+    // Generate presigned URLs for the response
+    const responsePost = updatedPost.toObject();
+    responsePost.media.image = await Promise.all(
+        updatedPost.media.image.map((key) => getPresignedUrl(key))
+    );
+    responsePost.media.video = await Promise.all(
+        updatedPost.media.video.map((key) => getPresignedUrl(key))
+    );
+
+    return res.status(200).json({
+        message: 'Post updated successfully',
+        post: responsePost,
+    });
 };
 
 const deletePost = async (req, res) => {
@@ -358,11 +444,8 @@ const repostPost = async (req, res) => {
         return res.status(404).json({ message: 'Post not found' });
     }
 
-    //  if the post is a repost or the original post
     const isARepost = post.isARepost;
     const originalPostId = isARepost ? post.originalPost._id : post._id;
-
-    // original post changes according to ID
     const originalPost = isARepost
         ? await Post.findById(originalPostId).exec()
         : post;
@@ -374,6 +457,7 @@ const repostPost = async (req, res) => {
     const hasReposted = originalPost.reactions.repostedBy.includes(userId);
 
     if (hasReposted) {
+        // Handle un-repost
         originalPost.reactions.repostedBy =
             originalPost.reactions.repostedBy.filter(
                 (id) => id.toString() !== userId
@@ -391,6 +475,7 @@ const repostPost = async (req, res) => {
             originalPost,
         });
     } else {
+        // Handle new repost
         const user = await User.findById(originalPost.userId);
         if (!user) {
             throw new Error('User not found');
@@ -400,25 +485,41 @@ const repostPost = async (req, res) => {
         originalPost.isReposted = true;
         await originalPost.save();
 
-        // fresh copy
+        // Generate presigned URLs for the original post's media
+        const originalPostWithUrls = {
+            ...originalPost.toObject(),
+            media: {
+                image: await Promise.all(
+                    originalPost.media.image.map((key) => getPresignedUrl(key))
+                ),
+                video: await Promise.all(
+                    originalPost.media.video.map((key) => getPresignedUrl(key))
+                ),
+            },
+            user,
+        };
+
         const repostedPost = new Post({
             userId,
             media: {
                 image: [],
                 video: [],
             },
-            originalPost: {
-                ...originalPost.toObject(),
-                user,
-            },
+            originalPost: originalPostWithUrls,
             isARepost: true,
         });
 
         await repostedPost.save();
 
+        // Generate presigned URLs for the response
+        const response = {
+            ...repostedPost.toObject(),
+            originalPost: originalPostWithUrls,
+        };
+
         return res.status(200).json({
             message: 'Post reposted successfully',
-            repostedPost,
+            repostedPost: response,
         });
     }
 };

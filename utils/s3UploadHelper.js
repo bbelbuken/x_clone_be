@@ -1,11 +1,14 @@
-const { uploadFile, deleteFile } = require('../config/s3');
+const {
+    uploadToS3,
+    getPresignedUrl,
+    deleteFileFromS3,
+} = require('../config/s3');
 
 const uploadFileToS3 = async (file, folder) => {
     if (!file.originalname) {
         throw new Error('File name is missing');
     }
-    const fileName = `${folder}/${Date.now()}-${file.originalname}`;
-    return await uploadFile(file.buffer, fileName, file.mimetype);
+    return await uploadToS3(file, folder);
 };
 
 const uploadFilesToS3 = async (files, folder) => {
@@ -15,14 +18,9 @@ const uploadFilesToS3 = async (files, folder) => {
     return Promise.all(files.map((file) => uploadFileToS3(file, folder)));
 };
 
-const deleteFileFromS3 = async (fileUrl) => {
-    const url = new URL(fileUrl);
-    const fileKey = url.pathname.substring(1);
-    await deleteFile(fileKey);
-};
-
 module.exports = {
     uploadFileToS3,
     uploadFilesToS3,
+    getPresignedUrl,
     deleteFileFromS3,
 };

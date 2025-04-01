@@ -1,15 +1,15 @@
 const {
     S3Client,
     PutObjectCommand,
-    GetObjectCommand,
     DeleteObjectCommand,
+    GetObjectCommand,
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const s3Client = new S3Client({
-    region: process.env.AWS_REGION,
+    region: process.env.AWS_BUCKET_REGION,
     credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        accessKeyId: process.env.AWS_ACCESS_KEY,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     },
 });
@@ -26,19 +26,25 @@ const uploadToS3 = async (file, folder) => {
 
     await s3Client.send(new PutObjectCommand(params));
 
-    // Generate a public URL (or use presigned URL if you prefer)
-    return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+    return key; // Return just the key, not the public URL
 };
 
-const deleteFromS3 = async (url) => {
-    const key = url.split(`.amazonaws.com/`)[1];
-
-    const params = {
+const getPresignedUrl = async (key, expiresIn = 3600) => {
+    const command = new GetObjectCommand({
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: key,
-    };
+    });
 
-    await s3Client.send(new DeleteObjectCommand(params));
+    return await getSignedUrl(s3Client, command, { expiresIn });
 };
 
-module.exports = { uploadToS3, deleteFromS3 };
+const deleteFileFromS3 = async (key) => {
+    await s3Client.send(
+        new DeleteObjectCommand({
+            Bucket: process.env.AWS_BUCKET_NAME,
+            Key: key,
+        })
+    );
+};
+
+module.exports = { uploadToS3, getPresignedUrl, deleteFileFromS3 };

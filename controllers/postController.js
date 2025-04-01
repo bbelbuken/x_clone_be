@@ -440,53 +440,49 @@ const repostPost = async (req, res) => {
     const { userId } = req.body;
 
     const post = await Post.findById(postId).exec();
-    if (!post) {
-        return res.status(404).json({ message: 'Post not found' });
-    }
+    if (!post) return res.status(404).json({ message: 'Post not found' });
 
     const isARepost = post.isARepost;
     const originalPostId = isARepost ? post.originalPost._id : post._id;
     const originalPost = isARepost
         ? await Post.findById(originalPostId).exec()
         : post;
-
-    if (!originalPost) {
+    if (!originalPost)
         return res.status(404).json({ message: 'Original post not found' });
-    }
 
     const hasReposted = originalPost.reactions.repostedBy.includes(userId);
 
     if (hasReposted) {
-        // Handle un-repost
         originalPost.reactions.repostedBy =
             originalPost.reactions.repostedBy.filter(
                 (id) => id.toString() !== userId
             );
         originalPost.isReposted = false;
         await originalPost.save();
-
         await Post.findOneAndDelete({
             userId,
             'originalPost._id': originalPost._id,
         });
+        return res
+            .status(200)
+            .json({ message: 'Repost removed successfully', originalPost });
+    }
 
-        return res.status(200).json({
-            message: 'Repost removed successfully',
-            originalPost,
-        });
-    } else {
-        // Handle new repost
-        const user = await User.findById(originalPost.userId);
-        if (!user) {
-            throw new Error('User not found');
-        }
+    const originalUser = await User.findById(originalPost.userId)
+        .select('avatar')
+        .exec();
+    const avatarUrl = originalUser?.avatar
+        ? await getPresignedUrl(originalUser.avatar)
+        : null;
 
-        originalPost.reactions.repostedBy.push(userId);
-        originalPost.isReposted = true;
-        await originalPost.save();
+    originalPost.reactions.repostedBy.push(userId);
+    originalPost.isReposted = true;
+    await originalPost.save();
 
-        // Generate presigned URLs for the original post's media
-        const originalPostWithUrls = {
+    const repostedPost = new Post({
+        userId,
+        media: { image: [], video: [] },
+        originalPost: {
             ...originalPost.toObject(),
             media: {
                 image: await Promise.all(
@@ -496,32 +492,17 @@ const repostPost = async (req, res) => {
                     originalPost.media.video.map((key) => getPresignedUrl(key))
                 ),
             },
-            user,
-        };
+            originalUserAvatar: avatarUrl, // Only including avatar URL here
+        },
+        isARepost: true,
+    });
 
-        const repostedPost = new Post({
-            userId,
-            media: {
-                image: [],
-                video: [],
-            },
-            originalPost: originalPostWithUrls,
-            isARepost: true,
-        });
+    await repostedPost.save();
 
-        await repostedPost.save();
-
-        // Generate presigned URLs for the response
-        const response = {
-            ...repostedPost.toObject(),
-            originalPost: originalPostWithUrls,
-        };
-
-        return res.status(200).json({
-            message: 'Post reposted successfully',
-            repostedPost: response,
-        });
-    }
+    return res.status(200).json({
+        message: 'Post reposted successfully',
+        repostedPost,
+    });
 };
 
 const quotePost = async (req, res) => {

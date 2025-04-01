@@ -4,18 +4,41 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { updateAvatar, clearAvatar } = require('../utils/updateAvatarHelper');
 const { updateHeader, clearHeader } = require('../utils/updateHeaderHelper');
-const { uploadFileToS3, deleteFileFromS3 } = require('../utils/s3UploadHelper');
+const {
+    uploadFileToS3,
+    deleteFileFromS3,
+    getPresignedUrl,
+} = require('../utils/s3UploadHelper');
 
 const getUsers = async (req, res) => {
-    const users = await User.find()
-        .select('-password -__v') // Exclude password and version key
-        .lean();
+    const users = await User.find().select('-password -__v').lean();
 
     if (!users?.length) {
         return res.status(404).json({ message: 'No users found' });
     }
 
-    res.status(200).json(users);
+    // Process users in parallel to add presigned URLs
+    const usersWithPresignedUrls = await Promise.all(
+        users.map(async (user) => {
+            const userWithUrls = { ...user };
+
+            // Add presigned URL for avatar if exists
+            if (user.avatar) {
+                userWithUrls.avatar = await getPresignedUrl(user.avatar);
+            }
+
+            // Add presigned URL for header photo if exists
+            if (user.header_photo) {
+                userWithUrls.header_photo = await getPresignedUrl(
+                    user.header_photo
+                );
+            }
+
+            return userWithUrls;
+        })
+    );
+
+    res.status(200).json(usersWithPresignedUrls);
 };
 
 const getUserById = async (req, res) => {
@@ -25,6 +48,16 @@ const getUserById = async (req, res) => {
 
     if (!user) {
         return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Add presigned URL for avatar if exists
+    if (user.avatar) {
+        user.avatar = await getPresignedUrl(user.avatar);
+    }
+
+    // Add presigned URL for header photo if exists
+    if (user.header_photo) {
+        user.header_photo = await getPresignedUrl(user.header_photo);
     }
 
     res.json(user);
@@ -38,6 +71,16 @@ const getCurrentAccount = async (req, res) => {
         .exec();
     if (!user) {
         return res.status(404).json({ message: 'No users found' });
+    }
+
+    // Add presigned URL for avatar if exists
+    if (user.avatar) {
+        user.avatar = await getPresignedUrl(user.avatar);
+    }
+
+    // Add presigned URL for header photo if exists
+    if (user.header_photo) {
+        user.header_photo = await getPresignedUrl(user.header_photo);
     }
 
     res.json(user);

@@ -1,32 +1,13 @@
-const {
-    fetchImageFromGoogleDrive,
-    uploadFileToGoogleDrive,
-    deleteFileFromGoogleDrive,
-} = require('./googleDriveHelper');
-const redisClient = require('../config/redis');
+const { uploadFileToS3, deleteFromS3 } = require('./s3Upload');
 
 const updateAvatar = async (user, newAvatarFile) => {
-    const avatarFileId = user.avatar.split('id=')[1];
     if (user.avatar) {
-        await deleteFileFromGoogleDrive(avatarFileId);
+        await deleteFromS3(user.avatar);
     }
 
-    const newAvatarUrl = await uploadFileToGoogleDrive(
-        newAvatarFile,
-        process.env.GOOGLE_DRIVE_USERAVATAR_FOLDERID
-    );
+    const newAvatarUrl = await uploadFileToS3(newAvatarFile, 'avatars');
 
     user.avatar = newAvatarUrl;
-
-    const avatarKey = `avatar:${user._id}`;
-    await redisClient.del(avatarKey);
-
-    // new cache redis
-    const imageData = await fetchImageFromGoogleDrive(newAvatarUrl);
-    await redisClient.set(avatarKey, imageData, { EX: 3600 });
-
-    user.cachedAvatarUrl = `data:image/jpeg;base64,${imageData}`;
-
     await user.save();
 
     return user;
@@ -34,18 +15,10 @@ const updateAvatar = async (user, newAvatarFile) => {
 
 const clearAvatar = async (user) => {
     if (user.avatar) {
-        const avatarFileId = user.avatar.split('id=')[1];
-        await deleteFileFromGoogleDrive(avatarFileId);
+        await deleteFromS3(user.avatar);
     }
 
     user.avatar = '';
-
-    // invalidate redis
-    const avatarKey = `avatar:${user._id}`;
-    await redisClient.del(avatarKey);
-
-    user.cachedAvatarUrl = '';
-
     await user.save();
 
     return user;

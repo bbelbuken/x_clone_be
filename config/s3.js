@@ -5,58 +5,40 @@ const {
     DeleteObjectCommand,
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-require('dotenv').config();
-
-const bucketName = process.env.AWS_BUCKET_NAME;
-const region = process.env.AWS_BUCKET_REGION;
-const accessKeyId = process.env.AWS_ACCESS_KEY;
-const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
 
 const s3Client = new S3Client({
-    region,
+    region: process.env.AWS_REGION,
     credentials: {
-        accessKeyId,
-        secretAccessKey,
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     },
 });
 
-// Upload a file to S3
-const uploadFile = async (fileBuffer, fileName, mimetype) => {
-    const uploadParams = {
-        Bucket: bucketName,
-        Body: fileBuffer,
-        Key: fileName,
-        ContentType: mimetype,
+const uploadToS3 = async (file, folder) => {
+    const key = `${folder}/${Date.now()}-${file.originalname}`;
+
+    const params = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
     };
 
-    const command = new PutObjectCommand(uploadParams);
-    await s3Client.send(command);
+    await s3Client.send(new PutObjectCommand(params));
 
     // Generate a public URL (or use presigned URL if you prefer)
-    return `https://${bucketName}.s3.${region}.amazonaws.com/${fileName}`;
+    return `https://${process.env.AWS_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 };
 
-// Get a file from S3
-const getFileStream = async (fileKey) => {
-    const downloadParams = {
-        Bucket: bucketName,
-        Key: fileKey,
+const deleteFromS3 = async (url) => {
+    const key = url.split(`.amazonaws.com/`)[1];
+
+    const params = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: key,
     };
 
-    const command = new GetObjectCommand(downloadParams);
-    const response = await s3Client.send(command);
-    return response.Body;
+    await s3Client.send(new DeleteObjectCommand(params));
 };
 
-// Delete a file from S3
-const deleteFile = async (fileKey) => {
-    const deleteParams = {
-        Bucket: bucketName,
-        Key: fileKey,
-    };
-
-    const command = new DeleteObjectCommand(deleteParams);
-    await s3Client.send(command);
-};
-
-module.exports = { uploadFile, getFileStream, deleteFile };
+module.exports = { uploadToS3, deleteFromS3 };

@@ -7,7 +7,6 @@ const {
 
 const getPosts = async (req, res) => {
     const posts = await Post.find()
-        .populate('userId') // Gets minimal user info
         .populate({
             path: 'repliedPost.userId',
             select: 'username',
@@ -32,8 +31,7 @@ const getPostById = async (req, res) => {
     const { postId } = req.params;
 
     const post = await Post.findById(postId)
-        .populate('userId')
-        .populate('repliedPost.userId', 'username')
+        .populate('repliedPost.userId')
         .lean()
         .exec();
 

@@ -1,90 +1,34 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
-const {
+/* const {
     uploadFilesToGoogleDrive,
     deleteFileFromGoogleDrive,
     fetchImageFromGoogleDrive,
-} = require('../utils/googleDriveHelper');
-const redisClient = require('../config/redis');
+} = require('../utils/googleDriveHelper'); */
 const mongoose = require('mongoose'); // Import mongoose for ObjectId
 const { ObjectId } = mongoose.Types; // Destructure ObjectId from mongoose.Types
 
 const getPosts = async (req, res) => {
-    const posts = await Post.find().lean();
+    const posts = await Post.find()
+        .populate('userId', 'username avatar verified') // Gets minimal user info
+        .populate({
+            path: 'repliedPost.userId',
+            select: 'username',
+            model: 'User',
+        })
+        .lean();
+
     if (!posts?.length) {
         return res.status(404).json({ message: 'No posts found' });
     }
 
-    const postsWithCachedFiles = await Promise.all(
-        posts.map(async (post) => {
-            if (post.media?.image && post.media.image.length > 0) {
-                const cachedImages = await Promise.all(
-                    post.media.image.map(async (image, index) => {
-                        const imgKey = `img:${post._id}:${index}`;
-                        let cachedImg = await redisClient.get(imgKey);
+    // Add repliedPostUsername to each post if it exists
+    const postsWithReplyUsernames = posts.map((post) => ({
+        ...post,
+        repliedPostUsername: post.repliedPost?.userId?.username || null,
+    }));
 
-                        if (!cachedImg) {
-                            const imageData = await fetchImageFromGoogleDrive(
-                                image
-                            );
-
-                            await redisClient.set(imgKey, imageData, {
-                                EX: 3600,
-                            });
-
-                            cachedImg = imageData;
-                        }
-
-                        return `data:image/jpeg;base64,${cachedImg}`; // Return base64-encoded image
-                    })
-                );
-
-                post.cachedImages = cachedImages;
-            }
-
-            // Process user avatar
-            const user = await User.findById(post.userId);
-
-            if (!user) {
-                throw new Error('User not found'); // This will be caught by your error handler
-            }
-
-            if (user.avatar) {
-                const avatarKey = `avatar:${user._id}`; // Use user._id as key for avatar in Redis
-                let cachedAvatar = await redisClient.get(avatarKey);
-
-                if (!cachedAvatar) {
-                    // Fetching img data from Google Drive
-                    const imageData = await fetchImageFromGoogleDrive(
-                        user.avatar
-                    );
-
-                    // Cache the avatar URL for future requests
-                    await redisClient.set(avatarKey, imageData, { EX: 3600 });
-
-                    cachedAvatar = imageData;
-                }
-
-                // Add the cached avatar URL to the post object
-                post.cachedAvatarUrl = `data:image/jpeg;base64,${cachedAvatar}`;
-            }
-
-            if (post.repliedPost) {
-                const repliedPostUser = await User.findById(
-                    post.repliedPost.userId
-                );
-                if (repliedPostUser) {
-                    post.repliedPostUsername = repliedPostUser.username;
-                }
-            }
-
-            // Return the post with cached images and avatar (if available)
-            return post;
-        })
-    );
-
-    // Send the final response once all posts are processed
-    res.status(200).json(postsWithCachedFiles);
+    res.status(200).json(postsWithReplyUsernames);
 };
 
 const getPostById = async (req, res) => {
@@ -444,11 +388,9 @@ const replyToPost = async (req, res) => {
     const mediaFiles = req.files || [];
 
     if (!userId || (!content && (!mediaFiles || mediaFiles.length === 0))) {
-        return res
-            .status(400)
-            .json({
-                message: 'User ID and either content or media are required',
-            });
+        return res.status(400).json({
+            message: 'User ID and either content or media are required',
+        });
     }
 
     const repliedPost = await Post.findById(postId).exec();

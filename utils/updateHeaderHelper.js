@@ -1,4 +1,4 @@
-const { uploadFileToS3, deleteFromS3 } = require('./s3Upload');
+const { uploadFileToS3, deleteFromS3 } = require('./s3UploadHelper');
 
 const updateHeader = async (user, newHeaderFile) => {
     if (user.header_photo) {

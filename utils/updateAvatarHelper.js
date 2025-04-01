@@ -1,4 +1,4 @@
-const { uploadFileToS3, deleteFromS3 } = require('./s3Upload');
+const { uploadFileToS3, deleteFromS3 } = require('./s3UploadHelper');
 
 const updateAvatar = async (user, newAvatarFile) => {
     if (user.avatar) {

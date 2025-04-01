@@ -2,12 +2,12 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const {
+/* const {
     fetchImageFromGoogleDrive,
     deleteFileFromGoogleDrive,
     uploadFileToGoogleDrive,
-} = require('../utils/googleDriveHelper');
-const redisClient = require('../config/redis');
+} = require('../utils/googleDriveHelper'); */
+//const redisClient = require('../config/redis');
 const { updateAvatar, clearAvatar } = require('../utils/updateAvatarHelper');
 const { updateHeader, clearHeader } = require('../utils/updateHeaderHelper');
 

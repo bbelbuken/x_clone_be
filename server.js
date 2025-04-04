@@ -10,6 +10,7 @@ const mongoose = require('mongoose');
 const connectDB = require('./config/connectDB');
 const { logger, logEvents } = require('./middlewares/logger');
 const errorHandler = require('./middlewares/errorHandler');
+const apiLimiter = require('./middlewares/apiLimiter');
 const PORT = process.env.PORT || 8080;
 
 connectDB();
@@ -27,6 +28,7 @@ app.use(cookieParser());
 app.use('/', express.static(path.join(__dirname, 'public')));
 
 // ROUTES
+app.use(apiLimiter);
 app.use('/', require('./routes/root'));
 app.use('/users', require('./routes/userRoutes'));
 app.use('/posts', require('./routes/postRoutes'));

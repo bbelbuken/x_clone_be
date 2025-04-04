@@ -271,8 +271,10 @@ const deletePost = async (req, res) => {
 
     const user = await User.findById(post.userId).exec();
     if (user) {
-        user.postCount -= 1;
-        await user.save();
+        if (user.postCount > 0) {
+            user.postCount -= 1;
+            await user.save();
+        }
     }
 
     if (post.repliedPost) {

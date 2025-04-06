@@ -40,7 +40,6 @@ const getPosts = async (req, res) => {
             };
         })
     );
-
     res.status(200).json(processedPosts);
 };
 

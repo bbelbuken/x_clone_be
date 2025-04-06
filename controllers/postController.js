@@ -469,9 +469,13 @@ const repostPost = async (req, res) => {
             .json({ message: 'Repost removed successfully', originalPost });
     }
 
+    // Get complete user object (excluding sensitive fields)
     const originalUser = await User.findById(originalPost.userId)
-        .select('avatar')
+        .select('-password -email -resetToken') // Exclude sensitive data
+        .lean()
         .exec();
+
+    // Get avatar URL separately
     const avatarUrl = originalUser?.avatar
         ? await getPresignedUrl(originalUser.avatar)
         : null;
@@ -480,20 +484,24 @@ const repostPost = async (req, res) => {
     originalPost.isReposted = true;
     await originalPost.save();
 
+    // Process media URLs
+    const processedOriginalPost = originalPost.toObject();
+    processedOriginalPost.media = {
+        image: await Promise.all(
+            originalPost.media.image.map((key) => getPresignedUrl(key))
+        ),
+        video: await Promise.all(
+            originalPost.media.video.map((key) => getPresignedUrl(key))
+        ),
+    };
+
     const repostedPost = new Post({
         userId,
         media: { image: [], video: [] },
         originalPost: {
-            ...originalPost.toObject(),
-            media: {
-                image: await Promise.all(
-                    originalPost.media.image.map((key) => getPresignedUrl(key))
-                ),
-                video: await Promise.all(
-                    originalPost.media.video.map((key) => getPresignedUrl(key))
-                ),
-            },
-            originalUserAvatar: avatarUrl, // Only including avatar URL here
+            ...processedOriginalPost,
+            user: originalUser, // Full user object
+            originalUserAvatar: avatarUrl, // Separate avatar URL
         },
         isARepost: true,
     });

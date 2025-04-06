@@ -9,7 +9,7 @@ const apiLimiter = rateLimit({
         expireTimeMs: 45 * 60 * 1000, // 45 minutes
     }),
     windowMs: 45 * 60 * 1000,
-    max: 50, // 50 requests per window per IP
+    max: 120, // 120 requests per window per IP
     message: 'Too many API requests, please try again later.',
     handler: (req, res, next, options) => {
         logEvents(

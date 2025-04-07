@@ -3,8 +3,6 @@
 Node.js/Express server handling authentication, post management, and file uploads to AWS S3.  
 **API Base URL**: `https://api.x-clone.app` *(Access restricted to frontend only)*  
 
-![Architecture Diagram](./docs/architecture.png) <!-- Optional -->
-
 ## 🔧 Core Services
 | Service          | Technology          | Purpose                          |
 |------------------|---------------------|----------------------------------|

@@ -20,7 +20,7 @@ graph LR
   B --> C[MongoDB Atlas]
   B --> D[AWS S3]
   B --> E[Redis Cache]
-
+```
 
 ## 📂 Critical File Structure
 ```plaintext
@@ -36,3 +36,4 @@ src/
 │   └── posts.js    # Content routes
 ├── middleware/     # Auth & validation
 └── app.js          # Server entry point
+```

@@ -19,7 +19,7 @@ graph LR
   A[Frontend] --> B[Backend API]
   B --> C[MongoDB Atlas]
   B --> D[AWS S3]
-  B --> E[Redis Cache] <!-- Optional -->
+  B --> E[Redis Cache]
 
 
 ## 📂 Critical File Structure

@@ -1,7 +1,6 @@
 const allowedOrigins = [
     'http://localhost:3000',
-    'https://www.google.com',
-    'https://drive.google.com',
+    'https://x-clone-liart.vercel.app/',
 ];
 
 module.exports = allowedOrigins;

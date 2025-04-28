@@ -6,10 +6,10 @@ const apiLimiter = rateLimit({
     store: new MongoStore({
         uri: process.env.MONGODB_URI,
         collectionName: 'apiRateLimits',
-        expireTimeMs: 45 * 60 * 1000, // 45 minutes
+        expireTimeMs: 20 * 60 * 1000, // 20 minutes
     }),
     windowMs: 45 * 60 * 1000,
-    max: 120, // 120 requests per window per IP
+    max: 200, // 200 requests per window per IP
     message: 'Too many API requests, please try again later.',
     handler: (req, res, next, options) => {
         logEvents(

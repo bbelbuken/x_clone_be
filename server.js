@@ -47,7 +47,6 @@ app.all('*', (req, res) => {
 });
 
 app.use(errorHandler);
-
 // LISTENERS
 mongoose.connection.once('open', () => {
     console.log('Connected to MongoDB');

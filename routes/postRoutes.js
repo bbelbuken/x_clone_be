@@ -19,6 +19,7 @@ router
     .route('/:postId/reply')
     .get(postController.getRepliesForPost)
     .post(upload.array('mediaFiles', 4), postController.replyToPost);
+
 router.route('/:postId/view').patch(postController.incrementView);
 router.route('/:postId/repost').post(postController.repostPost);
 router.route('/:postId/quote').post(postController.quotePost);

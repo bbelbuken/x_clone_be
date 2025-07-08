@@ -21,7 +21,7 @@ const login = async (req, res) => {
                 .status(401)
                 .json({ message: "We couldn't find your account" });
         }
-        
+
         return res
             .status(200)
             .json({ message: 'Account found', user: foundUser });
